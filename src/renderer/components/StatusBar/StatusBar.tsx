@@ -9,6 +9,8 @@ const VERSION = '1.0.0';
 export function StatusBar() {
   const status = useApp((s) => s.status);
   const stashes = useApp((s) => s.stashes);
+  const log = useApp((s) => s.log);
+  const isLoadingMoreCommits = useApp((s) => s.isLoadingMoreCommits);
   const runAndRefresh = useApp((s) => s.runAndRefresh);
   const ahead = status?.ahead ?? 0;
   const behind = status?.behind ?? 0;
@@ -71,6 +73,17 @@ export function StatusBar() {
       )}
 
       {dirty > 0 && <span className="px-1.5 text-warn">{dirty} changed</span>}
+
+      {log && (
+        <span className="flex items-center gap-1 px-1.5 text-dim">
+          {isLoadingMoreCommits && (
+            <div className="w-2.5 h-2.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mr-0.5" />
+          )}
+          <span>
+            {log.commits.length} of {log.totalCommits.toLocaleString()} commits
+          </span>
+        </span>
+      )}
 
       <span className="flex-1" />
       <span className="px-1.5">GraphGit v{VERSION}</span>

@@ -119,6 +119,7 @@ export interface GraphResult {
   commits: Commit[];
   hasUncommittedChanges: boolean;
   totalCommits: number;
+  hasMore?: boolean;
 }
 
 export interface DiffRange {
@@ -173,6 +174,12 @@ export interface GraphGitApi {
   blame(filePath: string): Promise<string>;
   openTerminal(): Promise<{ ok: boolean; error?: string }>;
   openInEditor(filePath: string): Promise<{ ok: boolean; error?: string }>;
+  minimizeWindow(): Promise<boolean>;
+  maximizeWindow(): Promise<boolean>;
+  closeWindow(): Promise<boolean>;
+  isWindowMaximized(): Promise<boolean>;
+  onMaximizeChange?(cb: (isMax: boolean) => void): () => void;
+  restartApp?(): Promise<boolean>;
 }
 
 export type ApiEvent = 'repo-updated';

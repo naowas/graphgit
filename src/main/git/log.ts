@@ -213,22 +213,28 @@ export function assignLanes(commits: RawCommit[]): LaneAssignment[] {
   return assignments;
 }
 
-export async function getLog(repoPath: string, status: GitStatus | null, limit = 500): Promise<GraphResult> {
+export async function getLog(repoPath: string, status: GitStatus | null, limit = 300): Promise<GraphResult> {
   if (!isValidRepo(repoPath)) throw new Error(`Not a git repository: ${repoPath}`);
 
   const base = { cwd: repoPath, maxBuffer: 64 * 1024 * 1024 };
-  const { stdout } = await execFileP(
-    'git',
-    ['log', `--pretty=tformat:${LOG_FORMAT}${REC_SEP}`, '--all', '-n', String(limit)],
-    base
-  );
+  const [logOut, headOut, countOut] = await Promise.all([
+    execFileP(
+      'git',
+      ['log', `--pretty=tformat:${LOG_FORMAT}${REC_SEP}`, '--all', '-n', String(limit)],
+      base
+    ),
+    execFileP('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoPath }).catch(
+      () => ({ stdout: '' })
+    ),
+    execFileP('git', ['rev-list', '--count', '--all'], { cwd: repoPath }).catch(
+      () => ({ stdout: '' })
+    )
+  ]);
 
-  const headOut = await execFileP('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoPath }).catch(
-    () => ({ stdout: '' })
-  );
   const currentBranch = headOut.stdout.trim();
+  const totalInRepo = parseInt(countOut.stdout.trim(), 10) || 0;
 
-  const raw = parseLogOutput(stdout.replace(new RegExp(REC_SEP + '$'), ''), currentBranch);
+  const raw = parseLogOutput(logOut.stdout.replace(new RegExp(REC_SEP + '$'), ''), currentBranch);
 
   // Decorations (%d) give us branches/tags/HEAD per commit (tab-separated; NUL not allowed in execFile args)
   const dec = await execFileP(
@@ -276,10 +282,13 @@ export async function getLog(repoPath: string, status: GitStatus | null, limit =
     pl2: assignments[i].pl2
   }));
 
+  const totalCommits = totalInRepo > 0 ? totalInRepo : commits.length;
+
   return {
     commits,
     hasUncommittedChanges: !!status && (status.staged.length > 0 || status.unstaged.length > 0),
-    totalCommits: commits.length
+    totalCommits,
+    hasMore: commits.length < totalCommits
   };
 }
 

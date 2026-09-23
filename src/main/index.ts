@@ -1,11 +1,14 @@
 import { app, BrowserWindow, shell } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { registerIpc } from './ipc';
 
 let mainWindow: BrowserWindow | null = null;
 let currentRepo: string | null = null;
 
 function createWindow() {
+  const iconPath = path.join(__dirname, '../../build/icon.png');
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -13,6 +16,8 @@ function createWindow() {
     minHeight: 640,
     backgroundColor: '#181a1f',
     title: 'GraphGit',
+    frame: false,
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -20,6 +25,14 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false
     }
+  });
+
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window:maximize-change', true);
+  });
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window:maximize-change', false);
   });
 
   if (process.env['ELECTRON_RENDERER_URL']) {

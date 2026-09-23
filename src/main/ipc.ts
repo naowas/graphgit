@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
+import { app, ipcMain, dialog, shell, BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -114,7 +114,7 @@ export function registerIpc(getWin: () => BrowserWindow | null, getRepo: () => s
   handle('git:log', async (limit?: number): Promise<GraphResult> => {
     const repo = requireRepo();
     const st = await getStatus(repo).catch(() => null);
-    return getLog(repo, st, limit ?? 500);
+    return getLog(repo, st, limit ?? 300);
   });
   handle('git:branches', async () => getBranches(requireRepo()));
   handle('git:stashes', async (): Promise<StashInfo[]> => getStashes(requireRepo()));
@@ -293,5 +293,36 @@ export function registerIpc(getWin: () => BrowserWindow | null, getRepo: () => s
     const abs = path.isAbsolute(filePath) ? filePath : path.join(repo, filePath);
     shell.showItemInFolder(abs);
     return { ok: true };
+  });
+
+  handle('window:minimize', async () => {
+    getWin()?.minimize();
+    return true;
+  });
+
+  handle('window:maximize', async () => {
+    const win = getWin();
+    if (!win) return false;
+    if (win.isMaximized()) {
+      win.unmaximize();
+    } else {
+      win.maximize();
+    }
+    return win.isMaximized();
+  });
+
+  handle('window:close', async () => {
+    getWin()?.close();
+    return true;
+  });
+
+  handle('window:is-maximized', async () => {
+    return getWin()?.isMaximized() ?? false;
+  });
+
+  handle('app:restart', async () => {
+    app.relaunch();
+    app.exit(0);
+    return true;
   });
 }

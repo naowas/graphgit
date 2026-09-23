@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Commit, CommitRef } from '../../../shared/types';
 import { useApp, WIP_HASH } from '../../store';
 import { api } from '../../lib/api';
@@ -330,9 +330,40 @@ export function CommitGraph() {
   const selectCommit = useApp((s) => s.selectCommit);
   const runAndRefresh = useApp((s) => s.runAndRefresh);
   const notify = useApp((s) => s.notify);
+  const loadMoreCommits = useApp((s) => s.loadMoreCommits);
+  const isLoadingMoreCommits = useApp((s) => s.isLoadingMoreCommits);
+
   const [menu, setMenu] = useState<{ x: number; y: number; commit: Commit } | null>(null);
   const [refMenu, setRefMenu] = useState<{ x: number; y: number; ref: CommitRef } | null>(null);
   const [hoveredHash, setHoveredHash] = useState<string | null>(null);
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(800);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (el) {
+      setViewportHeight(el.clientHeight);
+      const onResize = () => setViewportHeight(el.clientHeight);
+      window.addEventListener('resize', onResize);
+      return () => window.removeEventListener('resize', onResize);
+    }
+  }, []);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    setScrollTop(target.scrollTop);
+    setViewportHeight(target.clientHeight);
+
+    if (
+      !isLoadingMoreCommits &&
+      log?.hasMore &&
+      target.scrollTop + target.clientHeight >= target.scrollHeight - 500
+    ) {
+      void loadMoreCommits();
+    }
+  };
 
   const q = filter.trim().toLowerCase();
   const allCommits = log?.commits;
@@ -357,6 +388,14 @@ export function CommitGraph() {
   const wip = status && (status.staged.length > 0 || status.unstaged.length > 0);
   const graphW = Math.max(graphData.width, 40);
   const rowTop = wip ? ROW_H : 0;
+
+  const BUFFER = 15;
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_H) - BUFFER);
+  const endIndex = Math.min(commits.length - 1, Math.ceil((scrollTop + viewportHeight) / ROW_H) + BUFFER);
+  const visibleCommits = commits.length > 0 && endIndex >= startIndex ? commits.slice(startIndex, endIndex + 1) : [];
+
+  const topSpacerHeight = startIndex * ROW_H;
+  const bottomSpacerHeight = Math.max(0, (commits.length - 1 - endIndex) * ROW_H);
 
   const previewStub = (feature: string) => notify('info', `${feature} is a preview feature — coming soon`);
 
@@ -536,7 +575,11 @@ export function CommitGraph() {
 
 
   return (
-    <div className="flex-1 overflow-auto min-h-0 bg-base">
+    <div
+      ref={scrollContainerRef}
+      onScroll={handleScroll}
+      className="flex-1 overflow-auto min-h-0 bg-base"
+    >
       <div className="sticky top-0 z-10 flex items-center bg-panel border-b border-edge text-[11px] font-semibold tracking-wider text-dim select-none h-7">
         <div className="pl-3" style={{ width: BRANCH_W }}>
           BRANCH / TAG
@@ -563,6 +606,7 @@ export function CommitGraph() {
             selectedHash={selectedCommit}
             hoveredHash={hoveredHash}
             hasWip={!!wip}
+            visibleRange={{ startIndex, endIndex }}
             onHover={setHoveredHash}
             onSelect={(hash) => void selectCommit(hash)}
             onContextMenu={(e, hash) => {
@@ -584,26 +628,60 @@ export function CommitGraph() {
             laneColor={graphData.commits[0]?.color || '#26c6da'}
           />
         )}
-        {commits.map((c, i) => (
-          <CommitRow
-            key={c.hash + i}
-            commit={c}
-            graphW={graphW}
-            laneColor={graphData.commits[i]?.color || '#26c6da'}
-            hovered={hoveredHash === c.hash}
-            onContextMenu={(e, commit) => {
-              void selectCommit(commit.hash);
-              setRefMenu(null);
-              setMenu({ x: e.clientX, y: e.clientY, commit });
-            }}
-            onRefContextMenu={(e, ref) => {
-              setMenu(null);
-              setRefMenu({ x: e.clientX, y: e.clientY, ref });
-            }}
-          />
-        ))}
+
+        {/* Top spacer for virtual scrolling */}
+        {topSpacerHeight > 0 && <div style={{ height: topSpacerHeight }} />}
+
+        {/* Virtualized visible rows */}
+        {visibleCommits.map((c, sliceIdx) => {
+          const i = startIndex + sliceIdx;
+          return (
+            <CommitRow
+              key={c.hash}
+              commit={c}
+              graphW={graphW}
+              laneColor={graphData.commits[i]?.color || '#26c6da'}
+              hovered={hoveredHash === c.hash}
+              onContextMenu={(e, commit) => {
+                void selectCommit(commit.hash);
+                setRefMenu(null);
+                setMenu({ x: e.clientX, y: e.clientY, commit });
+              }}
+              onRefContextMenu={(e, ref) => {
+                setMenu(null);
+                setRefMenu({ x: e.clientX, y: e.clientY, ref });
+              }}
+            />
+          );
+        })}
+
+        {/* Bottom spacer for virtual scrolling */}
+        {bottomSpacerHeight > 0 && <div style={{ height: bottomSpacerHeight }} />}
       </div>
-      {commits.length === 0 && !wip && <div className="p-6 text-sm text-faint">No commits match the current filter.</div>}
+
+      {commits.length === 0 && !wip && (
+        <div className="p-6 text-sm text-faint">No commits match the current filter.</div>
+      )}
+
+      {/* Infinite Scroll Loader & Footer Status */}
+      <div className="flex items-center justify-center py-4 text-xs text-dim select-none gap-2">
+        {isLoadingMoreCommits ? (
+          <>
+            <div className="w-3.5 h-3.5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+            <span>Loading more commits… ({commits.length} of {log?.totalCommits || commits.length})</span>
+          </>
+        ) : log?.hasMore ? (
+          <button
+            className="btn text-xs px-3 py-1 hover:text-fg hover:border-cyan-500/50"
+            onClick={() => void loadMoreCommits()}
+          >
+            Load more commits ({commits.length} of {log.totalCommits})
+          </button>
+        ) : commits.length > 0 ? (
+          <span className="text-faint text-[11px]">Loaded all {commits.length} commits</span>
+        ) : null}
+      </div>
+
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} items={commitMenuItems(menu.commit)} onClose={() => setMenu(null)} />
       )}

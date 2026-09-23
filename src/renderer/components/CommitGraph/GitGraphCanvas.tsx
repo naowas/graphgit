@@ -11,6 +11,7 @@ export interface GitGraphCanvasProps {
   selectedHash?: string | null;
   hoveredHash?: string | null;
   hasWip?: boolean;
+  visibleRange?: { startIndex: number; endIndex: number };
   onHover?: (hash: string | null) => void;
   onSelect?: (hash: string) => void;
   onContextMenu?: (e: React.MouseEvent, hash: string) => void;
@@ -134,6 +135,7 @@ export function GitGraphCanvas({
   selectedHash,
   hoveredHash,
   hasWip = false,
+  visibleRange,
   onHover,
   onSelect,
   onContextMenu
@@ -171,8 +173,8 @@ export function GitGraphCanvas({
         ))}
 
         {/* Horizontal connector lines from Branch/Tag column into the node */}
-        {commits.map((c) =>
-          c.hasRefs ? (
+        {commits.map((c, i) =>
+          c.hasRefs && (!visibleRange || (i >= visibleRange.startIndex && i <= visibleRange.endIndex)) ? (
             <line
               key={`ref-conn-${c.hash}`}
               x1={-originX}
@@ -214,17 +216,22 @@ export function GitGraphCanvas({
 
       {/* Commit nodes with author avatars */}
       <g transform={`translate(${originX}, ${originY})`}>
-        {commits.map((c: RenderedGraphCommit) => (
-          <CommitAvatarNode
-            key={c.hash}
-            commit={c}
-            isSelected={selectedHash === c.hash}
-            isHovered={hoveredHash === c.hash}
-            onHover={onHover}
-            onSelect={onSelect}
-            onContextMenu={onContextMenu}
-          />
-        ))}
+        {commits.map((c: RenderedGraphCommit, i: number) => {
+          if (visibleRange && (i < visibleRange.startIndex || i > visibleRange.endIndex)) {
+            return null;
+          }
+          return (
+            <CommitAvatarNode
+              key={c.hash}
+              commit={c}
+              isSelected={selectedHash === c.hash}
+              isHovered={hoveredHash === c.hash}
+              onHover={onHover}
+              onSelect={onSelect}
+              onContextMenu={onContextMenu}
+            />
+          );
+        })}
       </g>
     </svg>
   );

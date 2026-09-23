@@ -50,6 +50,12 @@ export type Api = {
   openTerminal(): Promise<{ ok: boolean; error?: string }>;
   openInEditor(filePath: string): Promise<{ ok: boolean; error?: string }>;
   setActiveRepo(path: string): void;
+  minimizeWindow(): Promise<boolean>;
+  maximizeWindow(): Promise<boolean>;
+  closeWindow(): Promise<boolean>;
+  isWindowMaximized(): Promise<boolean>;
+  onMaximizeChange(cb: (isMax: boolean) => void): () => void;
+  restartApp(): Promise<boolean>;
 };
 
 const api: Api = {
@@ -94,7 +100,19 @@ const api: Api = {
   blame: (filePath) => call('git:blame', filePath),
   openTerminal: () => call('app:open-terminal'),
   openInEditor: (filePath) => call('app:open-in-editor', filePath),
-  setActiveRepo: (path: string) => ipcRenderer.send('repo:set-active', path)
+  setActiveRepo: (path: string) => ipcRenderer.send('repo:set-active', path),
+  minimizeWindow: () => call('window:minimize'),
+  maximizeWindow: () => call('window:maximize'),
+  closeWindow: () => call('window:close'),
+  isWindowMaximized: () => call('window:is-maximized'),
+  onMaximizeChange: (cb: (isMax: boolean) => void) => {
+    const handler = (_e: IpcRendererEvent, isMax: boolean) => cb(isMax);
+    ipcRenderer.on('window:maximize-change', handler);
+    return () => {
+      ipcRenderer.removeListener('window:maximize-change', handler);
+    };
+  },
+  restartApp: () => call('app:restart')
 };
 
 contextBridge.exposeInMainWorld('api', api);

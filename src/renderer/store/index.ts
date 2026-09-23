@@ -37,6 +37,8 @@ interface AppState {
   sidebarWidth: number;
   toast: { kind: 'info' | 'error' | 'success'; text: string } | null;
   filter: string;
+  commitLimit: number;
+  isLoadingMoreCommits: boolean;
 }
 
 interface AppActions {
@@ -46,6 +48,7 @@ interface AppActions {
   closeTab(path: string): void;
   setActiveTab(path: string): void;
   refresh(): Promise<void>;
+  loadMoreCommits(): Promise<void>;
   selectCommit(hash: string | null): Promise<void>;
   openFileDiff(d: OpenedDiff): Promise<void>;
   closeDiff(): void;
@@ -78,6 +81,8 @@ export const useApp = create<AppStore>((set, get) => ({
   sidebarWidth: 240,
   toast: null,
   filter: '',
+  commitLimit: 300,
+  isLoadingMoreCommits: false,
 
   async init() {
     const recent = (await unwrap(api.recentRepos()).catch(() => [])) as string[];
@@ -125,7 +130,7 @@ export const useApp = create<AppStore>((set, get) => ({
     const tabs = get().tabs.filter((t) => t.path !== p);
     let activeTab = get().activeTab;
     if (activeTab === p) activeTab = tabs.length > 0 ? tabs[tabs.length - 1].path : null;
-    set({ tabs, activeTab, selectedCommit: null, commitDetail: null, openDiff: null, fileDiff: null });
+    set({ tabs, activeTab, selectedCommit: null, commitDetail: null, openDiff: null, fileDiff: null, commitLimit: 300 });
     if (activeTab) {
       api.setActiveRepo(activeTab);
       void get().refresh();
@@ -135,7 +140,7 @@ export const useApp = create<AppStore>((set, get) => ({
   },
 
   setActiveTab(p) {
-    set({ activeTab: p, selectedCommit: null, commitDetail: null, openDiff: null, fileDiff: null });
+    set({ activeTab: p, selectedCommit: null, commitDetail: null, openDiff: null, fileDiff: null, commitLimit: 300 });
     api.setActiveRepo(p);
     void get().refresh();
   },
@@ -143,16 +148,37 @@ export const useApp = create<AppStore>((set, get) => ({
   async refresh() {
     const repo = get().activeTab;
     if (!repo) return;
+    const limit = get().commitLimit || 300;
     try {
       const [status, log, branches, stashes] = await Promise.all([
         unwrap(api.getStatus()),
-        unwrap(api.getLog()),
+        unwrap(api.getLog(limit)),
         unwrap(api.getBranches()),
         unwrap(api.getStashes())
       ]);
       set({ status, log, branches, stashes });
     } catch (err) {
       get().notify('error', String(err).replace('Error: ', ''));
+    }
+  },
+
+  async loadMoreCommits() {
+    const { activeTab, log, commitLimit, isLoadingMoreCommits } = get();
+    if (!activeTab || isLoadingMoreCommits) return;
+    if (!log || !log.hasMore) return;
+
+    const newLimit = commitLimit + 300;
+    set({ isLoadingMoreCommits: true });
+    try {
+      const nextLog = await unwrap(api.getLog(newLimit));
+      set({
+        log: nextLog,
+        commitLimit: newLimit,
+        isLoadingMoreCommits: false
+      });
+    } catch (err) {
+      set({ isLoadingMoreCommits: false });
+      get().notify('error', `Failed to load more commits: ${String(err)}`);
     }
   },
 

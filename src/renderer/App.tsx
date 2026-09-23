@@ -31,7 +31,7 @@ export function App() {
   }, [init]);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-base overflow-hidden border border-[#22262e]/50">
       <TabBar />
       {activeTab ? (
         <>
