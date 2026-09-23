@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Commit, CommitRef } from '../../../shared/types';
 import { useApp, WIP_HASH } from '../../store';
 import { Avatar } from '../ui/Avatar';
 import { api } from '../../lib/api';
 import { ContextMenu, ContextMenuItem } from '../ui/ContextMenu';
+import { commitsToMermaidGitGraph } from './gitgraph';
+import { LANE_W, REFS_W, ROW_H, laneColor } from './lanes';
+import { GraphLayout, MermaidGraph } from './MermaidGraph';
 import {
   GitBranch,
   GitPullRequest,
@@ -20,15 +23,10 @@ import {
   Rocket
 } from 'lucide-react';
 
-const LANE_W = 22;
-export const ROW_H = 34;
 const DOT_R = 5;
 
-export const LANE_COLORS = ['#4f8cff', '#9b7bff', '#4fc3f7', '#66bb6a', '#ffb74d', '#ef6c9a', '#26c6da', '#ab47bc', '#ff8a65', '#aed581'];
-
-export function laneColor(lane: number): string {
-  return LANE_COLORS[lane % LANE_COLORS.length];
-}
+/** Stable empty list, so the conversion memo keys off the filtered commits only. */
+const NO_COMMITS: Commit[] = [];
 
 export function RefPill({ value: r, onContextMenu }: { value: CommitRef; onContextMenu?: (e: React.MouseEvent) => void }) {
   const cls = r.isCurrent
@@ -74,6 +72,8 @@ function CommitRow({
   commit,
   isWip,
   graphW,
+  drawLanes = true,
+  hovered = false,
   childLane = -1,
   onContextMenu,
   onRefContextMenu
@@ -81,6 +81,10 @@ function CommitRow({
   commit: Commit;
   isWip?: boolean;
   graphW: number;
+  /** false while the mermaid overlay draws the graph column for the whole list */
+  drawLanes?: boolean;
+  /** true while the pointer sits on this commit's node in the mermaid overlay */
+  hovered?: boolean;
   /** lane of the commit directly above that arrives at this row */
   childLane?: number;
   onContextMenu?: (e: React.MouseEvent, commit: Commit) => void;
@@ -155,7 +159,7 @@ function CommitRow({
   return (
     <div
       className={`flex items-stretch border-b border-edge/40 cursor-pointer ${
-        isSelected ? 'bg-accent/10' : 'hover:bg-panel2/60'
+        isSelected ? 'bg-accent/10' : hovered ? 'bg-panel2/70' : 'hover:bg-panel2/60'
       }`}
       style={{ height: ROW_H }}
       onClick={() => void selectCommit(commit.hash)}
@@ -167,101 +171,104 @@ function CommitRow({
         }
       }}
     >
-      {/* Pills column */}
-      <div className="flex items-center gap-1 pl-2 min-w-[110px] max-w-[240px] overflow-hidden shrink-0">
+      {/* Pills column: fixed width, so the graph column starts at the same x in every row */}
+      <div className="flex items-center gap-1 pl-2 overflow-hidden shrink-0" style={{ width: REFS_W }}>
         {commit.refs.map((r, i) => (
           <RefPill key={i} value={r} onContextMenu={(e) => onRefContextMenu?.(e, r)} />
         ))}
       </div>
 
-      {/* Graph column */}
+      {/* Graph column. The mermaid overlay draws the whole column at once, so the
+          per-row lanes only fill the gap while no diagram is available. */}
       <div className="relative shrink-0" style={{ width: graphW }}>
-        <svg width="100%" height={ROW_H} className="absolute inset-0">
-          {throughLines
-            .filter((lane) => !mergeRetLanes.has(lane))
-            .map((lane) => (
+        {drawLanes && (
+          <svg width="100%" height={ROW_H} className="absolute inset-0">
+            {throughLines
+              .filter((lane) => !mergeRetLanes.has(lane))
+              .map((lane) => (
+                <line
+                  key={lane}
+                  x1={x(lane)}
+                  y1={0}
+                  x2={x(lane)}
+                  y2={ROW_H}
+                  stroke={laneColor(lane)}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                />
+              ))}
+            {mergeBottom.map((s) => (
               <line
-                key={lane}
-                x1={x(lane)}
-                y1={0}
-                x2={x(lane)}
+                key={'m' + s.key}
+                x1={x(s.from)}
+                y1={y}
+                x2={x(s.to)}
                 y2={ROW_H}
-                stroke={laneColor(lane)}
+                stroke={laneColor(s.to)}
                 strokeWidth={2}
                 strokeLinecap="round"
               />
             ))}
-          {mergeBottom.map((s) => (
-            <line
-              key={'m' + s.key}
-              x1={x(s.from)}
-              y1={y}
-              x2={x(s.to)}
-              y2={ROW_H}
-              stroke={laneColor(s.to)}
-              strokeWidth={2}
-              strokeLinecap="round"
-            />
-          ))}
-          {commit.parents.length > 1 && !(commit.pl2 && commit.pl2.length > 0) && (
-            <line
-              x1={x(commit.lane)}
-              y1={y}
-              x2={x(commit.lanes[0] ?? commit.lane)}
-              y2={y}
-              stroke={laneColor(commit.lane)}
-              strokeWidth={2}
-              strokeLinecap="round"
-            />
-          )}
-          {secondParentCurves.map((c) => (
-            <path
-              key={'r' + c.key}
-              d={c.d || `M ${x(c.lane)} 0 C ${x(c.lane)} ${y * 0.7}, ${x(c.to)} ${y * 0.7}, ${x(c.to)} ${y}`}
-              stroke={laneColor(c.lane)}
-              strokeWidth={2}
-              fill="none"
-              strokeLinecap="round"
-            />
-          ))}
-          {commit.lanes.map((pl, i) => {
-            if (pl === commit.lane) return null;
-            // Skip segments already drawn by the merge-return layout above.
-            if (commit.parents.length > 1 && commit.pl2) {
-              if (i === 0) return null;
-              if (commit.pl2.some((c) => c.returnFrom === pl)) return null;
-            }
-            return (
+            {commit.parents.length > 1 && !(commit.pl2 && commit.pl2.length > 0) && (
+              <line
+                x1={x(commit.lane)}
+                y1={y}
+                x2={x(commit.lanes[0] ?? commit.lane)}
+                y2={y}
+                stroke={laneColor(commit.lane)}
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+            )}
+            {secondParentCurves.map((c) => (
               <path
-                key={i}
-                d={`M ${x(commit.lane)} ${y} C ${x(commit.lane)} ${ROW_H * 0.75}, ${x(pl)} ${ROW_H * 0.25}, ${x(pl)} ${ROW_H}`}
-                stroke={laneColor(pl)}
+                key={'r' + c.key}
+                d={c.d || `M ${x(c.lane)} 0 C ${x(c.lane)} ${y * 0.7}, ${x(c.to)} ${y * 0.7}, ${x(c.to)} ${y}`}
+                stroke={laneColor(c.lane)}
                 strokeWidth={2}
                 fill="none"
                 strokeLinecap="round"
               />
-            );
-          })}
-          {isWip ? (
-            <circle cx={x(commit.lane)} cy={y} r={DOT_R + 1.5} fill="none" stroke="#d7a94f" strokeWidth={2.5} strokeDasharray="3 2" />
-          ) : commit.parents.length > 1 ? (
-            <g transform={`translate(${x(commit.lane)} ${y})`}>
-              <circle cx={0} cy={0} r={DOT_R + 2.5} fill={laneColor(commit.lane)} />
-              <circle cx={0} cy={0} r={DOT_R + 2.5} fill="none" stroke="#181a1f" strokeWidth={1} />
-              <path
-                d="M -4.5 0.8 C -2.5 0.8, -2.5 -1.2, -0.5 -1.2 M -4.5 0.8 C -3.8 1.8, -2.2 2.2, -1.2 3 L -1.2 4.5 M 4.5 -0.8 C 2.5 -0.8, 2.5 1.2, 0.5 1.2 M 4.5 -0.8 C 3.8 -1.8, 2.2 -2.2, 1.2 -3 L 1.2 -4.5"
-                fill="none"
-                stroke="#ffffff"
-                strokeWidth={1.2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx={0} cy={0} r={DOT_R + 2.5} fill="none" stroke="#181a1f" strokeWidth={1} opacity={0} />
-            </g>
-          ) : (
-            <circle cx={x(commit.lane)} cy={y} r={DOT_R} fill="none" stroke={laneColor(commit.lane)} strokeWidth={2.5} />
-          )}
-        </svg>
+            ))}
+            {commit.lanes.map((pl, i) => {
+              if (pl === commit.lane) return null;
+              // Skip segments already drawn by the merge-return layout above.
+              if (commit.parents.length > 1 && commit.pl2) {
+                if (i === 0) return null;
+                if (commit.pl2.some((c) => c.returnFrom === pl)) return null;
+              }
+              return (
+                <path
+                  key={i}
+                  d={`M ${x(commit.lane)} ${y} C ${x(commit.lane)} ${ROW_H * 0.75}, ${x(pl)} ${ROW_H * 0.25}, ${x(pl)} ${ROW_H}`}
+                  stroke={laneColor(pl)}
+                  strokeWidth={2}
+                  fill="none"
+                  strokeLinecap="round"
+                />
+              );
+            })}
+            {isWip ? (
+              <circle cx={x(commit.lane)} cy={y} r={DOT_R + 1.5} fill="none" stroke="#d7a94f" strokeWidth={2.5} strokeDasharray="3 2" />
+            ) : commit.parents.length > 1 ? (
+              <g transform={`translate(${x(commit.lane)} ${y})`}>
+                <circle cx={0} cy={0} r={DOT_R + 2.5} fill={laneColor(commit.lane)} />
+                <circle cx={0} cy={0} r={DOT_R + 2.5} fill="none" stroke="#181a1f" strokeWidth={1} />
+                <path
+                  d="M -4.5 0.8 C -2.5 0.8, -2.5 -1.2, -0.5 -1.2 M -4.5 0.8 C -3.8 1.8, -2.2 2.2, -1.2 3 L -1.2 4.5 M 4.5 -0.8 C 2.5 -0.8, 2.5 1.2, 0.5 1.2 M 4.5 -0.8 C 3.8 -1.8, 2.2 -2.2, 1.2 -3 L 1.2 -4.5"
+                  fill="none"
+                  stroke="#ffffff"
+                  strokeWidth={1.2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle cx={0} cy={0} r={DOT_R + 2.5} fill="none" stroke="#181a1f" strokeWidth={1} opacity={0} />
+              </g>
+            ) : (
+              <circle cx={x(commit.lane)} cy={y} r={DOT_R} fill="none" stroke={laneColor(commit.lane)} strokeWidth={2.5} />
+            )}
+          </svg>
+        )}
       </div>
 
       {/* Message column */}
@@ -284,30 +291,46 @@ export function CommitGraph() {
   const log = useApp((s) => s.log);
   const filter = useApp((s) => s.filter);
   const status = useApp((s) => s.status);
+  const selectedCommit = useApp((s) => s.selectedCommit);
   const selectCommit = useApp((s) => s.selectCommit);
   const runAndRefresh = useApp((s) => s.runAndRefresh);
   const notify = useApp((s) => s.notify);
   const [menu, setMenu] = useState<{ x: number; y: number; commit: Commit } | null>(null);
   const [refMenu, setRefMenu] = useState<{ x: number; y: number; ref: CommitRef } | null>(null);
+  /** alignment reported by the mermaid overlay; null while it has no diagram */
+  const [layout, setLayout] = useState<GraphLayout | null>(null);
+  /** commit row the pointer sits on in the diagram, so the list can highlight it */
+  const [hoveredHash, setHoveredHash] = useState<string | null>(null);
+
+  const q = filter.trim().toLowerCase();
+  const allCommits = log?.commits;
+  const commits = useMemo(() => {
+    if (!allCommits) return NO_COMMITS;
+    if (!q) return allCommits;
+    return allCommits.filter(
+      (c) =>
+        c.message.toLowerCase().includes(q) ||
+        c.hash.startsWith(q) ||
+        c.authorName.toLowerCase().includes(q) ||
+        c.refs.some((r) => r.label.toLowerCase().includes(q))
+    );
+  }, [allCommits, q]);
+  const currentBranch = status?.currentBranch ?? '';
+  const conversion = useMemo(() => commitsToMermaidGitGraph(commits, { currentBranch }), [commits, currentBranch]);
 
   if (!log) {
     return <div className="flex-1 flex items-center justify-center text-dim text-sm">Open a repository to view the commit graph</div>;
   }
 
-  const q = filter.toLowerCase();
-  const commits = q
-    ? log.commits.filter(
-        (c) =>
-          c.message.toLowerCase().includes(q) ||
-          c.hash.startsWith(q) ||
-          c.authorName.toLowerCase().includes(q) ||
-          c.refs.some((r) => r.label.toLowerCase().includes(q))
-      )
-    : log.commits;
   const wip = status && (status.staged.length > 0 || status.unstaged.length > 0);
+  // The overlay scales mermaid's lanes into the column width it reports; without
+  // a diagram the column is sized from the precomputed lane columns instead.
   const maxLane = commits.reduce((m, c) => Math.max(m, c.lane, ...c.lanes), 0);
-  const graphW = Math.max(LANE_W * (maxLane + 1) + LANE_W / 2, 60);
-  const currentBranch = status?.currentBranch ?? '';
+  const lanesW = Math.max(LANE_W * (maxLane + 1) + LANE_W / 2, 60);
+  const diagram = !!layout && layout.width > 0;
+  const graphW = diagram && layout ? layout.width : lanesW;
+  /** y of the first commit row below the optional WIP row */
+  const rowTop = wip ? ROW_H : 0;
 
   const previewStub = (feature: string) => notify('info', `${feature} is a preview feature — coming soon`);
 
@@ -489,30 +512,67 @@ export function CommitGraph() {
   return (
     <div className="flex-1 overflow-auto min-h-0 bg-base">
       <div className="sticky top-0 z-10 flex items-stretch bg-panel border-b border-edge text-xs text-dim">
-        <div className="pl-2 min-w-[110px] max-w-[240px] py-1.5">Branch / Tag</div>
-        <div className="py-1.5" style={{ width: graphW }}>
-          Graph
+        <div className="pl-2 py-1.5" style={{ width: REFS_W }}>
+          Branch / Tag
+        </div>
+        <div className="py-1.5 flex items-center gap-1.5" style={{ width: graphW }}>
+          <span>Graph</span>
+          {conversion.reasons.length > 0 && (
+            <span className="cursor-help text-warn" title={conversion.reasons.join('\n')}>
+              *
+            </span>
+          )}
         </div>
         <div className="py-1.5 flex-1">Committer / Message</div>
       </div>
-      {wip && <CommitRow commit={WIP_COMMIT} isWip graphW={graphW} childLane={commits[0]?.lane ?? -1} />}
-      {commits.map((c, i) => (
-        <CommitRow
-          key={c.hash + i}
-          commit={c}
-          graphW={graphW}
-          childLane={i === 0 ? (wip ? 0 : -1) : commits[i - 1].lane}
+      {/* The rows scrolling under the overlay: `id` is the CSS scope for the diagram */}
+      <div id="gg-rows" className="relative">
+        {wip && (
+          <CommitRow commit={WIP_COMMIT} isWip graphW={graphW} drawLanes={!diagram} childLane={commits[0]?.lane ?? -1} />
+        )}
+        {commits.map((c, i) => (
+          <CommitRow
+            key={c.hash + i}
+            commit={c}
+            graphW={graphW}
+            drawLanes={!diagram}
+            hovered={hoveredHash === c.hash}
+            childLane={i === 0 ? (wip ? 0 : -1) : commits[i - 1].lane}
+            onContextMenu={(e, commit) => {
+              void selectCommit(commit.hash);
+              setRefMenu(null);
+              setMenu({ x: e.clientX, y: e.clientY, commit });
+            }}
+            onRefContextMenu={(e, ref) => {
+              setMenu(null);
+              setRefMenu({ x: e.clientX, y: e.clientY, ref });
+            }}
+          />
+        ))}
+        <MermaidGraph
+          source={conversion.source}
+          mainBranch={conversion.mainBranch}
+          commits={commits}
+          rowTop={rowTop}
+          left={REFS_W}
+          width={graphW}
+          visible={diagram}
+          notes={conversion.reasons}
+          selectedHash={selectedCommit}
+          hoveredHash={hoveredHash}
+          onLayout={setLayout}
+          onHover={(commit) => setHoveredHash(commit ? commit.hash : null)}
+          onSelect={(commit) => void selectCommit(commit.hash)}
           onContextMenu={(e, commit) => {
             void selectCommit(commit.hash);
             setRefMenu(null);
             setMenu({ x: e.clientX, y: e.clientY, commit });
           }}
-          onRefContextMenu={(e, ref) => {
-            setMenu(null);
-            setRefMenu({ x: e.clientX, y: e.clientY, ref });
-          }}
         />
-      ))}
+        {diagram && wip && layout && (
+          <span className="gg-wip-marker" style={{ left: REFS_W + layout.firstNodeX, top: ROW_H / 2 }} />
+        )}
+      </div>
       {commits.length === 0 && !wip && <div className="p-6 text-sm text-faint">No commits match the current filter.</div>}
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} items={commitMenuItems(menu.commit)} onClose={() => setMenu(null)} />
