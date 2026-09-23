@@ -61,79 +61,11 @@ input:focus {
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-/* Mermaid gitGraph overlay — see components/CommitGraph/MermaidGraph.tsx.
-   `#gg-rows` scopes the commit list so these rules outrank the styles mermaid
-   ships with its own SVG. */
-#gg-rows .gg-graph {
-  /* the diagram is inert: the row-sized `.gg-hit` targets take the pointer, so a
-     click on empty column space lands on the row underneath, as it always did */
-  pointer-events: none;
-  /* the scaled diagram is taller than the rows (mermaid draws the branch labels
-     below the oldest commit), and that slack must not extend the scroll area */
-  overflow: hidden;
+/* GitGraph styling */
+#gg-rows svg circle {
+  transition: r 120ms ease, stroke-width 120ms ease;
 }
-#gg-rows .gg-graph-frame {
-  position: absolute;
-  top: 0;
-  left: 0;
-  /* the overlay scales and translates the frame, so its origin is the corner */
-  transform-origin: 0 0;
-}
-#gg-rows .gg-graph-frame > svg {
-  display: block;
-  max-width: none;
-}
-/* Ref pills already name every branch, so mermaid's own labels are noise */
-#gg-rows .gg-graph-frame .branchLabel,
-#gg-rows .gg-graph-frame .branchLabelBkg {
-  display: none;
-}
-#gg-rows .gg-graph-frame circle.commit {
-  transition:
-    r 120ms ease,
-    stroke-width 120ms ease;
-}
-#gg-rows .gg-graph-frame circle.commit.gg-node-hover {
-  r: 7px;
-  stroke-width: 3.5px;
-}
-#gg-rows .gg-graph-frame circle.commit.gg-node-selected {
-  r: 7.5px;
-  stroke-width: 4.5px;
+#gg-rows svg circle:hover {
+  filter: brightness(1.2);
 }
 
-.gg-hit {
-  position: absolute;
-  left: 0;
-  right: 0;
-  pointer-events: auto;
-}
-
-/* WIP marker: the diagram has no node for uncommitted changes */
-.gg-wip-marker {
-  position: absolute;
-  width: 13px;
-  height: 13px;
-  border: 2.5px dashed #d7a94f;
-  border-radius: 9999px;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-
-.gg-node-tip {
-  position: fixed;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 300px;
-  padding: 3px 8px;
-  border: 1px solid #2e3038;
-  border-radius: 4px;
-  background: #24262c;
-  color: #d7dae0;
-  font-size: 11px;
-  line-height: 16px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-}

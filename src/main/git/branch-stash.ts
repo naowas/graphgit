@@ -7,9 +7,23 @@ export async function getBranches(repoPath: string): Promise<{ local: BranchInfo
       const res = await git.branch(['-vv', '-a']);
       const local: BranchInfo[] = [];
       const remote: BranchInfo[] = [];
+      const seenLocal = new Set<string>();
+      const seenRemote = new Set<string>();
       for (const [name, info] of Object.entries(res.branches)) {
-        const isRemote = (info as { type?: string }).type === 'remote';
+        // simple-git BranchSummary has no `type` field — remote detection must use the `remotes/` prefix.
+        const isRemote = name.startsWith('remotes/');
         const cleanName = name.replace(/^remotes\//, '');
+        // simple-git can yield duplicate keys for the same tracking branch
+        // (e.g. local branch named `origin/feature/lead` + `remotes/origin/feature/lead`,
+        // fetch/prune edge-cases, or `origin/HEAD` symbolic ref); de-duplicate by fullName
+        if (isRemote) {
+          if (cleanName === 'origin/HEAD') continue;
+          if (seenRemote.has(cleanName)) continue;
+          seenRemote.add(cleanName);
+        } else {
+          if (seenLocal.has(cleanName)) continue;
+          seenLocal.add(cleanName);
+        }
         const b: BranchInfo = {
           name: isRemote ? cleanName.split('/').slice(1).join('/') || cleanName : cleanName,
           fullName: cleanName,

@@ -155,8 +155,12 @@ function SidebarFull({
   activeTab: string | null;
 }) {
   const q = filter.toLowerCase();
-  const locals = branches.local.filter((b) => b.name.toLowerCase().includes(q));
-  const remotes = branches.remote.filter((b) => b.fullName.toLowerCase().includes(q));
+  const locals = [...new Map(branches.local.map((b) => [b.fullName, b] as const)).values()].filter((b) =>
+    b.name.toLowerCase().includes(q)
+  );
+  const remotes = [...new Map(branches.remote.map((b) => [b.fullName, b] as const)).values()].filter((b) =>
+    b.fullName.toLowerCase().includes(q)
+  );
   const runAndRefresh = useApp((s) => s.runAndRefresh);
   const notify = useApp((s) => s.notify);
   const setFilter = useApp((s) => s.setFilter);
@@ -205,9 +209,9 @@ function SidebarFull({
 
       <div className="flex-1 overflow-y-auto min-h-0">
         <Section title="LOCAL" count={locals.length}>
-          {locals.map((b) => (
+          {locals.map((b, i) => (
             <BranchRow
-              key={b.fullName}
+              key={`local:${b.fullName}:${i}`}
               name={b.name}
               current={b.isCurrent}
               tracking={b.tracking}
@@ -220,23 +224,23 @@ function SidebarFull({
           ))}
         </Section>
         <Section title="REMOTE" count={remotes.length}>
-          {remotes.map((b) => (
+          {remotes.map((b, i) => (
             <BranchRow
-              key={b.fullName}
+              key={`remote:${b.fullName}:${i}`}
               name={b.fullName}
               remote
               onClick={() => notify('info', `Remote branch: ${b.fullName}`)}
             />
           ))}
         </Section>
-        <Section title="STASHES" count={stashes.length}>
+        <Section title="STASHES" count={stashes.length} defaultOpen={stashes.length > 0}>
           {stashes.map((s) => (
             <StashRow key={s.index} index={s.index} message={s.message} />
           ))}
           {stashes.length === 0 && <div className="px-3 py-1 text-xs text-faint">No stashes</div>}
         </Section>
         {STUB_SECTIONS.map((s) => (
-          <Section key={s.title} title={s.title} count={0}>
+          <Section key={s.title} title={s.title} count={0} defaultOpen={false}>
             <div className="px-3 py-1 text-xs text-faint flex items-center gap-1.5">{s.icon} Coming soon</div>
           </Section>
         ))}

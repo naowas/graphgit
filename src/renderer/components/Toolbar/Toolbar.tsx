@@ -57,97 +57,100 @@ export function Toolbar() {
   const act = (fn: () => Promise<unknown>, msg?: string) => () => void runAndRefresh(fn, msg);
 
   return (
-    <div className="flex items-center bg-panel border-b border-edge px-2 py-1 gap-2 shrink-0">
-      {/* Repository dropdown */}
-      <Dropdown
-        trigger={
-          <button className="btn gap-2 max-w-52" title="Switch repository">
-            <FolderOpen size={13} className="text-accent shrink-0" />
-            <span className="truncate">{tabName}</span>
-            <ChevronDown size={12} className="text-dim" />
-          </button>
-        }
-        width={280}
-      >
-        {(close) => (
-          <>
-            <MenuItem
-              icon={<FolderOpen size={14} />}
-              label="Open Repository…"
-              onClick={() => {
-                close();
-                void openRepoDialog();
-              }}
-            />
-            <MenuDivider />
-            {useApp.getState().recentRepos.map((r) => (
+    <div className="relative flex items-center bg-panel border-b border-edge px-3 py-1 gap-2 shrink-0 h-10">
+      {/* Left section: Repository & Branch dropdowns */}
+      <div className="flex items-center gap-2 shrink-0 z-[1]">
+        {/* Repository dropdown */}
+        <Dropdown
+          trigger={
+            <button className="btn gap-2 max-w-52" title="Switch repository">
+              <FolderOpen size={13} className="text-accent shrink-0" />
+              <span className="truncate">{tabName}</span>
+              <ChevronDown size={12} className="text-dim" />
+            </button>
+          }
+          width={280}
+        >
+          {(close) => (
+            <>
               <MenuItem
-                key={r}
-                label={r.split('/').pop() || r}
-                trailing={r}
+                icon={<FolderOpen size={14} />}
+                label="Open Repository…"
                 onClick={() => {
                   close();
-                  void useApp.getState().openRepo(r);
+                  void openRepoDialog();
                 }}
               />
-            ))}
-          </>
-        )}
-      </Dropdown>
-
-      {/* Branch dropdown */}
-      <Dropdown
-        trigger={
-          <button className="btn gap-2 max-w-48" title="Switch branch" disabled={!hasRepo}>
-            <GitBranch size={13} className="text-accent shrink-0" />
-            <span className="truncate">{branch || '—'}</span>
-            {ahead > 0 && <span className="text-xs text-dim">↑{ahead}</span>}
-            {behind > 0 && <span className="text-xs text-dim">↓{behind}</span>}
-            <ChevronDown size={12} className="text-dim" />
-          </button>
-        }
-        width={280}
-      >
-        {(close) => {
-          const { branches } = useApp.getState();
-          const q = branchQuery.toLowerCase();
-          return (
-            <>
-              <div className="px-3 pb-1.5">
-                <input
-                  placeholder="Filter branches…"
-                  value={branchQuery}
-                  onChange={(e) => setBranchQuery(e.target.value)}
-                  className="w-full text-xs"
-                  autoFocus
+              <MenuDivider />
+              {useApp.getState().recentRepos.map((r) => (
+                <MenuItem
+                  key={r}
+                  label={r.split('/').pop() || r}
+                  trailing={r}
+                  onClick={() => {
+                    close();
+                    void useApp.getState().openRepo(r);
+                  }}
                 />
-              </div>
-              {branches.local
-                .filter((b) => b.name.toLowerCase().includes(q))
-                .map((b) => (
-                  <MenuItem
-                    key={b.fullName}
-                    icon={<GitBranch size={13} className={b.isCurrent ? 'text-accent' : 'text-dim'} />}
-                    label={
-                      <span className={b.isCurrent ? 'text-accent font-medium' : ''}>
-                        {b.name}
-                        {b.tracking ? <span className="text-faint text-xs"> · {b.tracking}</span> : null}
-                      </span>
-                    }
-                    onClick={() => {
-                      close();
-                      if (!b.isCurrent) void runAndRefresh(() => api.checkoutBranch(b.fullName), `Checked out ${b.name}`);
-                    }}
-                    trailing={b.isCurrent ? '✓' : undefined}
-                  />
-                ))}
+              ))}
             </>
-          );
-        }}
-      </Dropdown>
+          )}
+        </Dropdown>
 
-      <div className="w-px h-7 bg-edge mx-1" />
-      <div className="flex-1 flex items-center justify-center gap-1">
+        {/* Branch dropdown */}
+        <Dropdown
+          trigger={
+            <button className="btn gap-2 max-w-48" title="Switch branch" disabled={!hasRepo}>
+              <GitBranch size={13} className="text-accent shrink-0" />
+              <span className="truncate">{branch || '—'}</span>
+              {ahead > 0 && <span className="text-xs text-dim">↑{ahead}</span>}
+              {behind > 0 && <span className="text-xs text-dim">↓{behind}</span>}
+              <ChevronDown size={12} className="text-dim" />
+            </button>
+          }
+          width={280}
+        >
+          {(close) => {
+            const { branches } = useApp.getState();
+            const q = branchQuery.toLowerCase();
+            return (
+              <>
+                <div className="px-3 pb-1.5">
+                  <input
+                    placeholder="Filter branches…"
+                    value={branchQuery}
+                    onChange={(e) => setBranchQuery(e.target.value)}
+                    className="w-full text-xs"
+                    autoFocus
+                  />
+                </div>
+                {branches.local
+                  .filter((b) => b.name.toLowerCase().includes(q))
+                  .map((b) => (
+                    <MenuItem
+                      key={b.fullName}
+                      icon={<GitBranch size={13} className={b.isCurrent ? 'text-accent' : 'text-dim'} />}
+                      label={
+                        <span className={b.isCurrent ? 'text-accent font-medium' : ''}>
+                          {b.name}
+                          {b.tracking ? <span className="text-faint text-xs"> · {b.tracking}</span> : null}
+                        </span>
+                      }
+                      onClick={() => {
+                        close();
+                        if (!b.isCurrent) void runAndRefresh(() => api.checkoutBranch(b.fullName), `Checked out ${b.name}`);
+                      }}
+                      trailing={b.isCurrent ? '✓' : undefined}
+                    />
+                  ))}
+              </>
+            );
+          }}
+        </Dropdown>
+      </div>
+
+      {/* Center section: Action buttons strictly centered in the toolbar */}
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 z-[2]">
         <ActionButton
           icon={<Download size={15} />}
           label="Pull"
@@ -186,18 +189,18 @@ export function Toolbar() {
         />
       </div>
 
-      <div className="flex-1" />
+      {/* Right section: Actions menu */}
+      <div className="ml-auto flex items-center gap-1 shrink-0 z-[1]">
+        <Dropdown
+          align="right"
+          trigger={
+            <button className="btn-icon" title="Actions">
+              <MoreHorizontal size={16} />
+            </button>
+          }
+          width={230}
+        >
 
-      {/* Actions menu */}
-      <Dropdown
-        align="right"
-        trigger={
-          <button className="btn-icon" title="Actions">
-            <MoreHorizontal size={16} />
-          </button>
-        }
-        width={230}
-      >
         {(close) => (
           <>
             <MenuItem
@@ -229,6 +232,7 @@ export function Toolbar() {
       </Dropdown>
 
       <SearchBox />
+      </div>
     </div>
   );
 }

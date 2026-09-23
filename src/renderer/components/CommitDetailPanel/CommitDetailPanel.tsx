@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Pencil,
   Plus,
@@ -14,7 +14,8 @@ import {
   Check,
   Undo2,
   RotateCcw,
-  Copy
+  Copy,
+  X
 } from 'lucide-react';
 import { FileChange, FileStatusKind } from '../../../shared/types';
 import { useApp, WIP_HASH } from '../../store';
@@ -264,25 +265,68 @@ export function CommitDetailPanel() {
   const notify = useApp((s) => s.notify);
   const runAndRefresh = useApp((s) => s.runAndRefresh);
   const isWip = selectedCommit === WIP_HASH;
+  const [panelWidth, setPanelWidth] = useState(360);
+
+  // Close panel on Escape
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') void selectCommit(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectCommit]);
+
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = panelWidth;
+    const onMove = (ev: MouseEvent) => {
+      setPanelWidth(Math.max(260, Math.min(640, startW - (ev.clientX - startX))));
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  // If no commit is selected and not loading, keep panel completely hidden so CommitGraph has full width
+  if (!selectedCommit && !loading) {
+    return null;
+  }
 
   if (loading) {
     return (
-      <div className="w-[380px] shrink-0 border-l border-edge bg-panel flex items-center justify-center">
+      <div
+        className="relative shrink-0 border-l border-edge bg-panel flex items-center justify-center min-h-0"
+        style={{ width: panelWidth }}
+      >
+        <div
+          className="absolute top-0 left-0 h-full w-1 cursor-col-resize hover:bg-accent/40 z-10"
+          onMouseDown={startResize}
+        />
         <Loader2 size={18} className="animate-spin text-dim" />
       </div>
     );
   }
 
   if (!detail) {
-    return (
-      <div className="w-[380px] shrink-0 border-l border-edge bg-panel flex items-center justify-center px-6 text-center">
-        <p className="text-dim text-sm">Select a commit to view its details and changed files.</p>
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div className="w-[380px] shrink-0 border-l border-edge bg-panel flex flex-col min-h-0">
+    <div
+      className="relative shrink-0 border-l border-edge bg-panel flex flex-col min-h-0"
+      style={{ width: panelWidth }}
+    >
+      {/* Draggable resize handle */}
+      <div
+        className="absolute top-0 left-0 h-full w-1.5 -ml-0.5 cursor-col-resize hover:bg-accent/40 z-10 transition-colors"
+        title="Drag to resize panel"
+        onMouseDown={startResize}
+      />
+
       {/* Header */}
       <div className="p-3 border-b border-edge">
         <div className="flex items-center gap-2">
@@ -335,6 +379,14 @@ export function CommitDetailPanel() {
               )
             }
           </Dropdown>
+          {/* Close button */}
+          <button
+            className="btn-icon !w-6 !h-6 hover:text-fg text-dim ml-0.5"
+            title="Close details (Esc)"
+            onClick={() => void selectCommit(null)}
+          >
+            <X size={13} />
+          </button>
         </div>
         <h3 className="mt-2 text-sm font-medium text-fg selectable">{detail.message}</h3>
         {detail.body && <pre className="mt-1 text-xs text-dim whitespace-pre-wrap font-sans selectable">{detail.body}</pre>}

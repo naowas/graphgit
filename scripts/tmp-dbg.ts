@@ -2,7 +2,7 @@ import { getLog } from '../src/main/git/log';
 import { getStatus } from '../src/main/git/status-diff';
 
 async function main() {
-  const repo = process.argv[2] || '/tmp/gg-mermaid';
+  const repo = process.argv[2] || '/var/www/git-gui';
   const st = await getStatus(repo);
   const log = await getLog(repo, st, 50);
   console.log('currentBranch', JSON.stringify(st.currentBranch));

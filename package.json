@@ -17,8 +17,10 @@
     "dist:mac": "electron-vite build && electron-builder --mac dmg zip"
   },
   "dependencies": {
+    "@gitgraph/core": "^1.5.0",
+    "@gitgraph/js": "^1.4.0",
+    "@gitgraph/react": "^1.6.0",
     "lucide-react": "^0.469.0",
-    "mermaid": "^12.0.0",
     "simple-git": "^3.27.0",
     "zustand": "^5.0.2"
   },

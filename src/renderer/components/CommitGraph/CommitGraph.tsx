@@ -1,12 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { Commit, CommitRef } from '../../../shared/types';
 import { useApp, WIP_HASH } from '../../store';
-import { Avatar } from '../ui/Avatar';
 import { api } from '../../lib/api';
 import { ContextMenu, ContextMenuItem } from '../ui/ContextMenu';
-import { commitsToMermaidGitGraph } from './gitgraph';
-import { LANE_W, REFS_W, ROW_H, laneColor } from './lanes';
-import { GraphLayout, MermaidGraph } from './MermaidGraph';
+import { buildGitGraph } from './gitgraph';
+import { LANE_W, ROW_H, BRANCH_W } from './lanes';
+import { GitGraphCanvas } from './GitGraphCanvas';
 import {
   GitBranch,
   GitPullRequest,
@@ -20,7 +19,12 @@ import {
   ArrowDown,
   Sparkles,
   ArrowUp,
-  Rocket
+  Rocket,
+  Check,
+  Laptop,
+  User,
+  Tag,
+  Cloud
 } from 'lucide-react';
 
 const DOT_R = 5;
@@ -28,17 +32,101 @@ const DOT_R = 5;
 /** Stable empty list, so the conversion memo keys off the filtered commits only. */
 const NO_COMMITS: Commit[] = [];
 
-export function RefPill({ value: r, onContextMenu }: { value: CommitRef; onContextMenu?: (e: React.MouseEvent) => void }) {
-  const cls = r.isCurrent
-    ? 'bg-accent text-white border-accent'
-    : r.kind === 'tag'
-      ? 'bg-panel3 text-warn border-warn/40'
-      : r.isRemote
-        ? 'bg-panel3 text-dim border-edge'
-        : 'bg-panel3 text-fg/90 border-edge';
+export interface DisplayRef {
+  label: string;
+  kind: 'branch' | 'tag' | 'head';
+  isCurrent: boolean;
+  hasLocal: boolean;
+  hasRemote: boolean;
+  raw: CommitRef;
+}
+
+export function consolidateRefs(refs: CommitRef[]): DisplayRef[] {
+  if (!refs || refs.length === 0) return [];
+  const results: DisplayRef[] = [];
+  const handled = new Set<string>();
+
+  // 1. Tags
+  for (const r of refs) {
+    if (r.kind === 'tag') {
+      results.push({
+        label: r.label,
+        kind: 'tag',
+        isCurrent: false,
+        hasLocal: false,
+        hasRemote: false,
+        raw: r
+      });
+    }
+  }
+
+  // 2. Local branches paired with matching remote tracking branch
+  for (const r of refs) {
+    if (r.kind !== 'tag' && !r.isRemote) {
+      handled.add(r.label);
+      const remoteRef = refs.find(
+        (other) => other.isRemote && (other.label === `origin/${r.label}` || other.label.endsWith(`/${r.label}`))
+      );
+      if (remoteRef) {
+        handled.add(remoteRef.label);
+      }
+      results.push({
+        label: r.label,
+        kind: r.kind,
+        isCurrent: !!r.isCurrent,
+        hasLocal: true,
+        hasRemote: !!remoteRef,
+        raw: r
+      });
+    }
+  }
+
+  // 3. Remote-only branches that didn't match a local branch
+  for (const r of refs) {
+    if (r.kind !== 'tag' && r.isRemote && !handled.has(r.label)) {
+      results.push({
+        label: r.label,
+        kind: r.kind,
+        isCurrent: !!r.isCurrent,
+        hasLocal: false,
+        hasRemote: true,
+        raw: r
+      });
+    }
+  }
+
+  // Sort: current checked-out branch first, then local branches, then tags, then remote-only
+  results.sort((a, b) => {
+    if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1;
+    if (a.hasLocal !== b.hasLocal) return a.hasLocal ? -1 : 1;
+    if ((a.kind === 'tag') !== (b.kind === 'tag')) return a.kind === 'tag' ? -1 : 1;
+    return a.label.localeCompare(b.label);
+  });
+
+  return results;
+}
+
+export function RefPill({
+  value: r,
+  onContextMenu
+}: {
+  value: DisplayRef;
+  onContextMenu?: (e: React.MouseEvent) => void;
+}) {
+  const isHead = r.isCurrent;
+  const isTag = r.kind === 'tag';
+
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] leading-4 font-medium whitespace-nowrap cursor-pointer ${cls}`}
+    <div
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] leading-none font-medium whitespace-nowrap cursor-pointer select-none transition-all shadow-sm min-w-0 max-w-full overflow-hidden ${
+        isHead
+          ? 'bg-[#0e3b4a] border border-[#00bcd4]/70 text-cyan-200 shadow-[#00bcd4]/10'
+          : isTag
+            ? 'bg-[#352a1c] border border-warn/70 text-amber-200'
+            : r.hasRemote && !r.hasLocal
+              ? 'bg-panel3 border border-edge text-dim hover:text-fg'
+              : 'bg-panel3 border border-edge text-fg/90 hover:border-fg/40'
+      }`}
       title={r.label}
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => {
@@ -47,9 +135,12 @@ export function RefPill({ value: r, onContextMenu }: { value: CommitRef; onConte
         onContextMenu?.(e);
       }}
     >
-      {r.kind === 'tag' ? 'tag: ' : ''}
-      {r.label}
-    </span>
+      {isHead && <Check size={11} className="text-cyan-300 stroke-[2.5] shrink-0" />}
+      {isTag && <Tag size={10} className="text-warn shrink-0" />}
+      <span className="truncate">{r.label}</span>
+      {(r.hasLocal || isHead) && <Laptop size={10} className="shrink-0 opacity-80" />}
+      {r.hasRemote && <Cloud size={10} className="shrink-0 opacity-80" />}
+    </div>
   );
 }
 
@@ -67,26 +158,52 @@ const WIP_COMMIT: Commit = {
   lanes: []
 };
 
+function formatRelativeDate(iso: string): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    const now = Date.now();
+    const diff = (now - d.getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 86400 * 30) return `${Math.floor(diff / 86400)}d ago`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  } catch {
+    return iso;
+  }
+}
+
+function formatFullDate(iso: string): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return iso;
+  }
+}
 
 function CommitRow({
   commit,
   isWip,
   graphW,
-  drawLanes = true,
+  laneColor = '#26c6da',
   hovered = false,
-  childLane = -1,
   onContextMenu,
   onRefContextMenu
 }: {
   commit: Commit;
   isWip?: boolean;
   graphW: number;
-  /** false while the mermaid overlay draws the graph column for the whole list */
-  drawLanes?: boolean;
-  /** true while the pointer sits on this commit's node in the mermaid overlay */
+  laneColor?: string;
   hovered?: boolean;
-  /** lane of the commit directly above that arrives at this row */
-  childLane?: number;
   onContextMenu?: (e: React.MouseEvent, commit: Commit) => void;
   onRefContextMenu?: (e: React.MouseEvent, ref: CommitRef) => void;
 }) {
@@ -94,9 +211,6 @@ function CommitRow({
   const selectCommit = useApp((s) => s.selectCommit);
   const openFileDiff = useApp((s) => s.openFileDiff);
   const isSelected = selected === commit.hash;
-
-  const x = (lane: number) => LANE_W / 2 + lane * LANE_W;
-  const y = ROW_H / 2;
 
   const onDoubleClick = () => {
     if (isWip) {
@@ -110,56 +224,16 @@ function CommitRow({
     }
   };
 
-  // Lanes that pass through this row without a node: full-height vertical lines
-  // (own lane continues from parents, child's lane arrives from above).
-  const ownLane = commit.parents.length > 1 ? -1 : commit.lane;
-  const throughLines = Array.from(
-    new Set([ownLane, childLane].filter((l): l is number => l >= 0 && l !== commit.lane))
-  ).sort((a, b) => a - b);
-
-  // Merge layout for genuine merge rows: first parent continues below in the
-  // merge node's lane, extra parents get a return curve back into the node.
-  const secondParentCurves: { key: number; lane: number; to: number; d: string }[] = [];
-  const mergeBottom: { key: number; from: number; to: number }[] = [];
-  const mergeRetLanes = new Set<number>();
-  if (commit.parents.length > 1 && commit.pl2) {
-    mergeRetLanes.add(commit.lane);
-    for (const c of commit.pl2) {
-      if (c.returnFrom === undefined) {
-        // First parent: vertical column below the node in the merge lane.
-        mergeBottom.push({ key: c.lane, from: commit.lane, to: c.lane ?? commit.lane });
-      } else {
-        // Extra parent: curve from its lane down into the merge node,
-        // plus its own vertical column below.
-        mergeRetLanes.add(c.lane);
-        secondParentCurves.push({
-          key: c.lane,
-          lane: c.lane,
-          to: commit.lane,
-          d: ''
-        });
-        mergeBottom.push({ key: -c.lane - 1, from: c.lane, to: c.lane });
-      }
-    }
-  } else if (commit.parents.length > 1) {
-    const maxLane = Math.max(0, graphW / LANE_W - 1);
-    for (let i = 1; i < commit.parents.length; i++) {
-      const pLane = commit.lanes[i] ?? commit.lane;
-      if (pLane === commit.lane) continue;
-      const start = Math.max(0, Math.min(pLane, maxLane));
-      secondParentCurves.push({
-        key: i,
-        lane: pLane,
-        to: commit.lane,
-        d: `M ${x(start)} 0 C ${x(start)} ${y * 0.7}, ${x(commit.lane)} ${y * 0.7}, ${x(commit.lane)} ${y}`
-      });
-    }
-  }
+  const displayRefs = useMemo(() => consolidateRefs(commit.refs), [commit.refs]);
 
   return (
     <div
-      className={`flex items-stretch border-b border-edge/40 cursor-pointer ${
-        isSelected ? 'bg-accent/10' : hovered ? 'bg-panel2/70' : 'hover:bg-panel2/60'
+      className={`flex items-center border-b border-edge/30 cursor-pointer select-none transition-colors ${
+        isSelected
+          ? 'bg-[#183550] border-b-[#204a70]'
+          : hovered
+            ? 'bg-panel2/60'
+            : 'hover:bg-panel2/40'
       }`}
       style={{ height: ROW_H }}
       onClick={() => void selectCommit(commit.hash)}
@@ -171,117 +245,77 @@ function CommitRow({
         }
       }}
     >
-      {/* Pills column: fixed width, so the graph column starts at the same x in every row */}
-      <div className="flex items-center gap-1 pl-2 overflow-hidden shrink-0" style={{ width: REFS_W }}>
-        {commit.refs.map((r, i) => (
-          <RefPill key={i} value={r} onContextMenu={(e) => onRefContextMenu?.(e, r)} />
-        ))}
+      {/* 1. BRANCH / TAG column */}
+      <div
+        className="relative flex items-center shrink-0 pl-2.5 pr-0 overflow-hidden"
+        style={{ width: BRANCH_W }}
+      >
+        {displayRefs.length > 0 ? (
+          <div className="flex items-center w-full min-w-0 pr-0 overflow-hidden">
+            <div className="flex items-center gap-1 shrink min-w-0 z-[2] max-w-[calc(100%-20px)] overflow-hidden">
+              <RefPill
+                value={displayRefs[0]}
+                onContextMenu={(e) => onRefContextMenu?.(e, displayRefs[0].raw)}
+              />
+              {displayRefs.length > 1 && (
+                <span
+                  className="rounded bg-panel3 border border-edge px-1 py-0.5 text-[10px] text-dim shrink-0 font-medium cursor-pointer hover:border-fg/40 whitespace-nowrap"
+                  title={displayRefs.slice(1).map((r) => r.label).join(', ')}
+                >
+                  +{displayRefs.length - 1}
+                </span>
+              )}
+            </div>
+            {/* Horizontal connector line extending to right edge of BRANCH / TAG column */}
+            <div
+              className="flex-1 min-w-[16px] h-[2px] z-[1]"
+              style={{ backgroundColor: laneColor }}
+            />
+          </div>
+        ) : null}
       </div>
 
-      {/* Graph column. The mermaid overlay draws the whole column at once, so the
-          per-row lanes only fill the gap while no diagram is available. */}
-      <div className="relative shrink-0" style={{ width: graphW }}>
-        {drawLanes && (
-          <svg width="100%" height={ROW_H} className="absolute inset-0">
-            {throughLines
-              .filter((lane) => !mergeRetLanes.has(lane))
-              .map((lane) => (
-                <line
-                  key={lane}
-                  x1={x(lane)}
-                  y1={0}
-                  x2={x(lane)}
-                  y2={ROW_H}
-                  stroke={laneColor(lane)}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                />
-              ))}
-            {mergeBottom.map((s) => (
-              <line
-                key={'m' + s.key}
-                x1={x(s.from)}
-                y1={y}
-                x2={x(s.to)}
-                y2={ROW_H}
-                stroke={laneColor(s.to)}
-                strokeWidth={2}
-                strokeLinecap="round"
-              />
-            ))}
-            {commit.parents.length > 1 && !(commit.pl2 && commit.pl2.length > 0) && (
-              <line
-                x1={x(commit.lane)}
-                y1={y}
-                x2={x(commit.lanes[0] ?? commit.lane)}
-                y2={y}
-                stroke={laneColor(commit.lane)}
-                strokeWidth={2}
-                strokeLinecap="round"
-              />
-            )}
-            {secondParentCurves.map((c) => (
-              <path
-                key={'r' + c.key}
-                d={c.d || `M ${x(c.lane)} 0 C ${x(c.lane)} ${y * 0.7}, ${x(c.to)} ${y * 0.7}, ${x(c.to)} ${y}`}
-                stroke={laneColor(c.lane)}
-                strokeWidth={2}
-                fill="none"
-                strokeLinecap="round"
-              />
-            ))}
-            {commit.lanes.map((pl, i) => {
-              if (pl === commit.lane) return null;
-              // Skip segments already drawn by the merge-return layout above.
-              if (commit.parents.length > 1 && commit.pl2) {
-                if (i === 0) return null;
-                if (commit.pl2.some((c) => c.returnFrom === pl)) return null;
-              }
-              return (
-                <path
-                  key={i}
-                  d={`M ${x(commit.lane)} ${y} C ${x(commit.lane)} ${ROW_H * 0.75}, ${x(pl)} ${ROW_H * 0.25}, ${x(pl)} ${ROW_H}`}
-                  stroke={laneColor(pl)}
-                  strokeWidth={2}
-                  fill="none"
-                  strokeLinecap="round"
-                />
-              );
-            })}
-            {isWip ? (
-              <circle cx={x(commit.lane)} cy={y} r={DOT_R + 1.5} fill="none" stroke="#d7a94f" strokeWidth={2.5} strokeDasharray="3 2" />
-            ) : commit.parents.length > 1 ? (
-              <g transform={`translate(${x(commit.lane)} ${y})`}>
-                <circle cx={0} cy={0} r={DOT_R + 2.5} fill={laneColor(commit.lane)} />
-                <circle cx={0} cy={0} r={DOT_R + 2.5} fill="none" stroke="#181a1f" strokeWidth={1} />
-                <path
-                  d="M -4.5 0.8 C -2.5 0.8, -2.5 -1.2, -0.5 -1.2 M -4.5 0.8 C -3.8 1.8, -2.2 2.2, -1.2 3 L -1.2 4.5 M 4.5 -0.8 C 2.5 -0.8, 2.5 1.2, 0.5 1.2 M 4.5 -0.8 C 3.8 -1.8, 2.2 -2.2, 1.2 -3 L 1.2 -4.5"
-                  fill="none"
-                  stroke="#ffffff"
-                  strokeWidth={1.2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle cx={0} cy={0} r={DOT_R + 2.5} fill="none" stroke="#181a1f" strokeWidth={1} opacity={0} />
-              </g>
-            ) : (
-              <circle cx={x(commit.lane)} cy={y} r={DOT_R} fill="none" stroke={laneColor(commit.lane)} strokeWidth={2.5} />
-            )}
-          </svg>
-        )}
-      </div>
+      {/* 2. GRAPH column placeholder (visuals rendered by GitGraphCanvas) */}
+      <div className="relative shrink-0" style={{ width: graphW }} />
 
-      {/* Message column */}
-      <div className="flex items-center gap-2 flex-1 min-w-0 pr-3">
-        {!isWip && <Avatar name={commit.authorName} email={commit.authorEmail} avatarHash={commit.avatarHash} size={20} />}
+      {/* 3. COMMIT MESSAGE column */}
+      <div className="flex items-center flex-1 min-w-0 pr-3 pl-1 overflow-hidden">
+        {/* Vertical cyan indicator bar as in the reference image */}
+        <div
+          className="w-[3px] h-4 rounded-full shrink-0 mr-2"
+          style={{ backgroundColor: laneColor }}
+        />
+
+        {/* Message Subject */}
         {isWip ? (
-          <span className="truncate text-warn font-medium">Uncommitted changes</span>
+          <span className="truncate text-warn font-medium text-xs font-mono">// WIP</span>
         ) : (
-          <span className={`truncate ${isSelected ? 'text-fg font-medium' : 'text-fg/90'}`}>{commit.message || '(no message)'}</span>
+          <span
+            className={`truncate text-xs font-normal ${
+              isSelected ? 'text-white font-medium' : 'text-fg/90'
+            }`}
+            title={commit.message}
+          >
+            {commit.message || '(no message)'}
+          </span>
         )}
-        {commit.body && <span className="truncate text-dim text-xs hidden lg:block">{commit.body.split('\n')[0]}</span>}
-        <span className="flex-1" />
-        <span className="text-xs text-faint font-mono shrink-0">{commit.shortHash.slice(0, 7)}</span>
+
+        {/* Extended Body snippet */}
+        {commit.body && (
+          <span className="truncate text-dim/70 text-xs hidden lg:block ml-2 opacity-80">
+            - {commit.body.split('\n')[0]}
+          </span>
+        )}
+
+        {/* Relative date on the right edge */}
+        {!isWip && commit.date && (
+          <span
+            className="text-[11px] text-faint ml-auto shrink-0 pl-3 select-none"
+            title={formatFullDate(commit.date)}
+          >
+            {formatRelativeDate(commit.date)}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -291,15 +325,13 @@ export function CommitGraph() {
   const log = useApp((s) => s.log);
   const filter = useApp((s) => s.filter);
   const status = useApp((s) => s.status);
+  const currentBranch = status?.currentBranch ?? '';
   const selectedCommit = useApp((s) => s.selectedCommit);
   const selectCommit = useApp((s) => s.selectCommit);
   const runAndRefresh = useApp((s) => s.runAndRefresh);
   const notify = useApp((s) => s.notify);
   const [menu, setMenu] = useState<{ x: number; y: number; commit: Commit } | null>(null);
   const [refMenu, setRefMenu] = useState<{ x: number; y: number; ref: CommitRef } | null>(null);
-  /** alignment reported by the mermaid overlay; null while it has no diagram */
-  const [layout, setLayout] = useState<GraphLayout | null>(null);
-  /** commit row the pointer sits on in the diagram, so the list can highlight it */
   const [hoveredHash, setHoveredHash] = useState<string | null>(null);
 
   const q = filter.trim().toLowerCase();
@@ -315,21 +347,15 @@ export function CommitGraph() {
         c.refs.some((r) => r.label.toLowerCase().includes(q))
     );
   }, [allCommits, q]);
-  const currentBranch = status?.currentBranch ?? '';
-  const conversion = useMemo(() => commitsToMermaidGitGraph(commits, { currentBranch }), [commits, currentBranch]);
+
+  const graphData = useMemo(() => buildGitGraph(commits, { rowH: ROW_H, laneW: LANE_W }), [commits]);
 
   if (!log) {
     return <div className="flex-1 flex items-center justify-center text-dim text-sm">Open a repository to view the commit graph</div>;
   }
 
   const wip = status && (status.staged.length > 0 || status.unstaged.length > 0);
-  // The overlay scales mermaid's lanes into the column width it reports; without
-  // a diagram the column is sized from the precomputed lane columns instead.
-  const maxLane = commits.reduce((m, c) => Math.max(m, c.lane, ...c.lanes), 0);
-  const lanesW = Math.max(LANE_W * (maxLane + 1) + LANE_W / 2, 60);
-  const diagram = !!layout && layout.width > 0;
-  const graphW = diagram && layout ? layout.width : lanesW;
-  /** y of the first commit row below the optional WIP row */
+  const graphW = Math.max(graphData.width, 40);
   const rowTop = wip ? ROW_H : 0;
 
   const previewStub = (feature: string) => notify('info', `${feature} is a preview feature — coming soon`);
@@ -511,33 +537,60 @@ export function CommitGraph() {
 
   return (
     <div className="flex-1 overflow-auto min-h-0 bg-base">
-      <div className="sticky top-0 z-10 flex items-stretch bg-panel border-b border-edge text-xs text-dim">
-        <div className="pl-2 py-1.5" style={{ width: REFS_W }}>
-          Branch / Tag
+      <div className="sticky top-0 z-10 flex items-center bg-panel border-b border-edge text-[11px] font-semibold tracking-wider text-dim select-none h-7">
+        <div className="pl-3" style={{ width: BRANCH_W }}>
+          BRANCH / TAG
         </div>
-        <div className="py-1.5 flex items-center gap-1.5" style={{ width: graphW }}>
-          <span>Graph</span>
-          {conversion.reasons.length > 0 && (
-            <span className="cursor-help text-warn" title={conversion.reasons.join('\n')}>
-              *
-            </span>
-          )}
+        <div className="pl-1" style={{ width: graphW }}>
+          GRAPH
         </div>
-        <div className="py-1.5 flex-1">Committer / Message</div>
+        <div className="flex-1 min-w-0 pl-1">
+          COMMIT MESSAGE
+        </div>
       </div>
-      {/* The rows scrolling under the overlay: `id` is the CSS scope for the diagram */}
+      {/* The rows scrolling under the overlay */}
       <div id="gg-rows" className="relative">
+        {/* GitGraph Canvas overlay */}
+        <div
+          className="absolute top-0 bottom-0 pointer-events-none z-[1]"
+          style={{ left: BRANCH_W, width: graphW }}
+        >
+          <GitGraphCanvas
+            graphData={graphData}
+            rowTop={rowTop}
+            rowH={ROW_H}
+            laneW={LANE_W}
+            selectedHash={selectedCommit}
+            hoveredHash={hoveredHash}
+            hasWip={!!wip}
+            onHover={setHoveredHash}
+            onSelect={(hash) => void selectCommit(hash)}
+            onContextMenu={(e, hash) => {
+              void selectCommit(hash);
+              const commit = commits.find((c) => c.hash === hash);
+              if (commit) {
+                setRefMenu(null);
+                setMenu({ x: e.clientX, y: e.clientY, commit });
+              }
+            }}
+          />
+        </div>
+
         {wip && (
-          <CommitRow commit={WIP_COMMIT} isWip graphW={graphW} drawLanes={!diagram} childLane={commits[0]?.lane ?? -1} />
+          <CommitRow
+            commit={WIP_COMMIT}
+            isWip
+            graphW={graphW}
+            laneColor={graphData.commits[0]?.color || '#26c6da'}
+          />
         )}
         {commits.map((c, i) => (
           <CommitRow
             key={c.hash + i}
             commit={c}
             graphW={graphW}
-            drawLanes={!diagram}
+            laneColor={graphData.commits[i]?.color || '#26c6da'}
             hovered={hoveredHash === c.hash}
-            childLane={i === 0 ? (wip ? 0 : -1) : commits[i - 1].lane}
             onContextMenu={(e, commit) => {
               void selectCommit(commit.hash);
               setRefMenu(null);
@@ -549,34 +602,12 @@ export function CommitGraph() {
             }}
           />
         ))}
-        <MermaidGraph
-          source={conversion.source}
-          mainBranch={conversion.mainBranch}
-          commits={commits}
-          rowTop={rowTop}
-          left={REFS_W}
-          width={graphW}
-          visible={diagram}
-          notes={conversion.reasons}
-          selectedHash={selectedCommit}
-          hoveredHash={hoveredHash}
-          onLayout={setLayout}
-          onHover={(commit) => setHoveredHash(commit ? commit.hash : null)}
-          onSelect={(commit) => void selectCommit(commit.hash)}
-          onContextMenu={(e, commit) => {
-            void selectCommit(commit.hash);
-            setRefMenu(null);
-            setMenu({ x: e.clientX, y: e.clientY, commit });
-          }}
-        />
-        {diagram && wip && layout && (
-          <span className="gg-wip-marker" style={{ left: REFS_W + layout.firstNodeX, top: ROW_H / 2 }} />
-        )}
       </div>
       {commits.length === 0 && !wip && <div className="p-6 text-sm text-faint">No commits match the current filter.</div>}
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} items={commitMenuItems(menu.commit)} onClose={() => setMenu(null)} />
       )}
+
       {refMenu && (
         <ContextMenu x={refMenu.x} y={refMenu.y} items={refMenuItems(refMenu.ref)} onClose={() => setRefMenu(null)} />
       )}
