@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+out/
+dist/
+
+# Electron
+*.asar
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.cursor/
+.gemini/
+.claude/
+.junie/
+
+# Logs
+*.log
+npm-debug.log*
