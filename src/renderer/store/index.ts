@@ -1,0 +1,249 @@
+import { create } from 'zustand';
+import {
+  BranchInfo,
+  CommitDetail,
+  FileDiff,
+  GraphResult,
+  GitStatus,
+  StashInfo
+} from '../../shared/types';
+import { api, unwrap } from '../lib/api';
+
+export type ActivePane = 'workdir' | 'commit' | 'file';
+
+export interface OpenedDiff {
+  /** workdir file (staged+unstaged combined) or commit file; null => working directory */
+  commitHash: string | null;
+  filePath: string;
+  worktree?: boolean;
+  staged?: boolean;
+}
+
+interface AppState {
+  tabs: { path: string; name: string }[];
+  activeTab: string | null;
+  recentRepos: string[];
+  status: GitStatus | null;
+  log: GraphResult | null;
+  branches: { local: BranchInfo[]; remote: BranchInfo[] };
+  stashes: StashInfo[];
+  selectedCommit: string | null;
+  commitDetail: CommitDetail | null;
+  openDiff: OpenedDiff | null;
+  fileDiff: FileDiff | null;
+  detailLoading: boolean;
+  diffLoading: boolean;
+  sidebarVisible: boolean;
+  sidebarWidth: number;
+  toast: { kind: 'info' | 'error' | 'success'; text: string } | null;
+  filter: string;
+}
+
+interface AppActions {
+  init(): Promise<void>;
+  openRepo(path: string): Promise<void>;
+  openRepoDialog(): Promise<void>;
+  closeTab(path: string): void;
+  setActiveTab(path: string): void;
+  refresh(): Promise<void>;
+  selectCommit(hash: string | null): Promise<void>;
+  openFileDiff(d: OpenedDiff): Promise<void>;
+  closeDiff(): void;
+  setFilter(f: string): void;
+  toggleSidebar(): void;
+  setSidebarWidth(w: number): void;
+  notify(kind: 'info' | 'error' | 'success', text: string): void;
+  runAndRefresh(fn: () => Promise<unknown>, successMsg?: string): Promise<boolean>;
+}
+
+export type AppStore = AppState & AppActions;
+
+export const WIP_HASH = '0000000-wip';
+
+export const useApp = create<AppStore>((set, get) => ({
+  tabs: [],
+  activeTab: null,
+  recentRepos: [],
+  status: null,
+  log: null,
+  branches: { local: [], remote: [] },
+  stashes: [],
+  selectedCommit: null,
+  commitDetail: null,
+  openDiff: null,
+  fileDiff: null,
+  detailLoading: false,
+  diffLoading: false,
+  sidebarVisible: true,
+  sidebarWidth: 240,
+  toast: null,
+  filter: '',
+
+  async init() {
+    const recent = (await unwrap(api.recentRepos()).catch(() => [])) as string[];
+    set({ recentRepos: recent });
+    if (recent.length > 0) await get().openRepo(recent[0]);
+  },
+
+  async openRepo(p) {
+    try {
+      const res = (await unwrap(api.openRepo(p))) as {
+        ok: boolean;
+        repo?: { path: string; name: string };
+        error?: string;
+      };
+      if (!res.ok || !res.repo) {
+        get().notify('error', res.error || 'Failed to open repository');
+        return;
+      }
+      api.setActiveRepo(res.repo.path);
+      const repo = res.repo;
+      const tabs = [...get().tabs.filter((t) => t.path !== repo.path), { path: repo.path, name: repo.name }];
+      set({ tabs, activeTab: repo.path });
+      await get().refresh();
+      get().notify('success', `Opened ${repo.name}`);
+    } catch (err) {
+      get().notify('error', String(err).replace('Error: ', ''));
+    }
+  },
+
+  async openRepoDialog() {
+    try {
+      const res = (await unwrap(api.openRepoDialog())) as {
+        ok: boolean;
+        repo?: { path: string; name: string };
+        error?: string;
+      };
+      if (res.ok && res.repo) await get().openRepo(res.repo.path);
+    } catch (err) {
+      if (String(err).includes('canceled')) return;
+      get().notify('error', String(err).replace('Error: ', ''));
+    }
+  },
+
+  closeTab(p) {
+    const tabs = get().tabs.filter((t) => t.path !== p);
+    let activeTab = get().activeTab;
+    if (activeTab === p) activeTab = tabs.length > 0 ? tabs[tabs.length - 1].path : null;
+    set({ tabs, activeTab, selectedCommit: null, commitDetail: null, openDiff: null, fileDiff: null });
+    if (activeTab) {
+      api.setActiveRepo(activeTab);
+      void get().refresh();
+    } else {
+      set({ status: null, log: null, branches: { local: [], remote: [] }, stashes: [] });
+    }
+  },
+
+  setActiveTab(p) {
+    set({ activeTab: p, selectedCommit: null, commitDetail: null, openDiff: null, fileDiff: null });
+    api.setActiveRepo(p);
+    void get().refresh();
+  },
+
+  async refresh() {
+    const repo = get().activeTab;
+    if (!repo) return;
+    try {
+      const [status, log, branches, stashes] = await Promise.all([
+        unwrap(api.getStatus()),
+        unwrap(api.getLog()),
+        unwrap(api.getBranches()),
+        unwrap(api.getStashes())
+      ]);
+      set({ status, log, branches, stashes });
+    } catch (err) {
+      get().notify('error', String(err).replace('Error: ', ''));
+    }
+  },
+
+  async selectCommit(hash) {
+    set({ selectedCommit: hash, commitDetail: null, detailLoading: true });
+    if (!hash) {
+      set({ detailLoading: false });
+      return;
+    }
+    if (hash === WIP_HASH) {
+      const status = get().status;
+      const files = [
+        ...(status?.staged || []).map((f) => ({ path: f.path, status: f.status })),
+        ...(status?.unstaged || []).map((f) => ({ path: f.path, status: f.status }))
+      ];
+      set({
+        commitDetail: {
+          hash: WIP_HASH,
+          shortHash: 'WIP',
+          parents: [],
+          message: 'Uncommitted changes',
+          body: 'Working directory changes not yet committed',
+          authorName: '',
+          authorEmail: '',
+          date: new Date().toISOString(),
+          files,
+          insertions: 0,
+          deletions: 0
+        },
+        detailLoading: false
+      });
+      return;
+    }
+    const detail = await api.getCommitDetail(hash);
+    if (get().selectedCommit === hash) {
+      set({ commitDetail: detail, detailLoading: false });
+      if (!detail) get().notify('error', 'Failed to load commit details');
+    }
+  },
+
+  async openFileDiff(d) {
+    set({ openDiff: d, fileDiff: null, diffLoading: true });
+    try {
+      const diff = await api.getFileDiff(d.commitHash ?? '', d.filePath, {
+        staged: d.staged,
+        worktree: d.worktree ?? d.commitHash === null
+      });
+      set({
+        fileDiff: diff && diff.hunks.length > 0 ? diff : { path: d.filePath, hunks: [], insertions: 0, deletions: 0 },
+        diffLoading: false
+      });
+    } catch (err) {
+      set({ diffLoading: false });
+      get().notify('error', String(err).replace('Error: ', ''));
+    }
+  },
+
+  closeDiff() {
+    set({ openDiff: null, fileDiff: null });
+  },
+
+  setFilter(f) {
+    set({ filter: f });
+  },
+
+  toggleSidebar() {
+    set({ sidebarVisible: !get().sidebarVisible });
+  },
+
+  setSidebarWidth(w) {
+    set({ sidebarWidth: Math.max(52, Math.min(480, w)) });
+  },
+
+  notify(kind, text) {
+    set({ toast: { kind, text } });
+    const cur = text;
+    setTimeout(() => {
+      if (get().toast?.text === cur) set({ toast: null });
+    }, 3500);
+  },
+
+  async runAndRefresh(fn, successMsg) {
+    try {
+      await unwrap(fn());
+      await get().refresh();
+      if (successMsg) get().notify('success', successMsg);
+      return true;
+    } catch (err) {
+      get().notify('error', String(err).replace('Error: ', ''));
+      return false;
+    }
+  }
+}));
+

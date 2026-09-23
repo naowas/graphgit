@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  @apply bg-base text-fg font-sans text-base antialiased;
+  user-select: none;
+}
+
+/* allow selection in diff/message content */
+.selectable,
+.selectable * {
+  user-select: text;
+}
+
+/* Slim scrollbars */
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #3a3d46;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #4a4e59;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+input,
+textarea {
+  @apply bg-panel2 border border-edge rounded px-2 py-1 text-fg outline-none;
+}
+input:focus {
+  @apply border-accent;
+}
+
+.btn {
+  @apply flex items-center gap-1.5 rounded px-2 py-1 text-sm text-fg hover:bg-panel3 transition-colors disabled:opacity-40 disabled:pointer-events-none;
+}
+.btn-icon {
+  @apply flex items-center justify-center w-7 h-7 rounded text-dim hover:text-fg hover:bg-panel3 transition-colors disabled:opacity-40 disabled:pointer-events-none;
+}
+
+/* Solid, visible shadow for floating menus on the dark theme */
+.shadow-xl {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+}

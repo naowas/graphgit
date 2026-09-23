@@ -1,0 +1,380 @@
+import React, { useMemo, useState } from 'react';
+import {
+  Pencil,
+  Plus,
+  Minus,
+  ArrowRight,
+  ChevronRight,
+  ChevronDown,
+  FileText,
+  List,
+  GitBranch,
+  Loader2,
+  MessageSquarePlus,
+  Check,
+  Undo2,
+  RotateCcw,
+  Copy
+} from 'lucide-react';
+import { FileChange, FileStatusKind } from '../../../shared/types';
+import { useApp, WIP_HASH } from '../../store';
+import { Avatar } from '../ui/Avatar';
+import { Dropdown, MenuItem } from '../ui/Dropdown';
+import { api } from '../../lib/api';
+
+export function StatusIcon({ status }: { status: FileStatusKind }) {
+  const map: Record<FileStatusKind, { icon: React.ReactNode; color: string; title: string }> = {
+    modified: { icon: <Pencil size={11} />, color: 'text-warn', title: 'Modified' },
+    added: { icon: <Plus size={12} />, color: 'text-add', title: 'Added' },
+    deleted: { icon: <Minus size={12} />, color: 'text-del', title: 'Deleted' },
+    renamed: { icon: <ArrowRight size={11} />, color: 'text-accent', title: 'Renamed' },
+    untracked: { icon: <Plus size={12} />, color: 'text-dim', title: 'Untracked' },
+    conflicted: { icon: <Pencil size={11} />, color: 'text-del', title: 'Conflicted' }
+  };
+  const { icon, color, title } = map[status] || map.modified;
+  return (
+    <span className={`${color} shrink-0`} title={title}>
+      {icon}
+    </span>
+  );
+}
+
+function formatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return (
+      d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) +
+      ' @ ' +
+      d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    );
+  } catch {
+    return iso;
+  }
+}
+
+/** Working-copy commit form: stage/unstage/discard + commit message box. */
+function WorkdirPanel() {
+
+  const status = useApp((s) => s.status);
+  const runAndRefresh = useApp((s) => s.runAndRefresh);
+  const [msg, setMsg] = useState('');
+
+  const doCommit = async () => {
+    if (!msg.trim()) return;
+    const ok = await runAndRefresh(() => api.commit(msg.trim()), 'Commit created');
+    if (ok) setMsg('');
+  };
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+      {status && status.staged.length > 0 && (
+        <>
+          <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-dim bg-panel2/40">
+            <span className="flex-1">STAGED FILES ({status.staged.length})</span>
+            <button className="hover:text-fg" title="Unstage all" onClick={() => void runAndRefresh(() => api.unstageAll())}>
+              <Undo2 size={12} />
+            </button>
+          </div>
+          {status.staged.map((f) => (
+            <div key={f.path} className="group flex items-center gap-2 px-3 py-1 text-sm hover:bg-panel2">
+              <StatusIcon status={f.status} />
+              <span className="truncate font-mono text-xs flex-1">{f.path}</span>
+              <button
+                className="hidden group-hover:block text-dim hover:text-fg"
+                title="Unstage"
+                onClick={() => void runAndRefresh(() => api.unstageFiles([f.path]))}
+              >
+                <Undo2 size={11} />
+              </button>
+            </div>
+          ))}
+        </>
+      )}
+
+      {status && status.unstaged.length > 0 && (
+        <>
+          <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-dim bg-panel2/40">
+            <span className="flex-1">UNSTAGED FILES ({status.unstaged.length})</span>
+            <button className="hover:text-fg" title="Stage all" onClick={() => void runAndRefresh(() => api.stageAll())}>
+              <Plus size={12} />
+            </button>
+          </div>
+          {status.unstaged.map((f) => (
+            <div key={f.path} className="group flex items-center gap-2 px-3 py-1 text-sm hover:bg-panel2">
+              <StatusIcon status={f.status} />
+              <span
+                className="truncate font-mono text-xs flex-1 cursor-pointer text-fg/90 hover:text-accent"
+                onClick={() => void useApp.getState().openFileDiff({ commitHash: null, filePath: f.path })}
+              >
+                {f.path}
+              </span>
+              <button
+                className="hidden group-hover:block text-dim hover:text-fg"
+                title="Stage file"
+                onClick={() => void runAndRefresh(() => api.stageFiles([f.path]))}
+              >
+                <Plus size={11} />
+              </button>
+              {f.status !== 'untracked' && (
+                <button
+                  className="hidden group-hover:block text-dim hover:text-del"
+                  title="Discard changes"
+                  onClick={() => void runAndRefresh(() => api.discardFile(f.path), 'Changes discarded')}
+                >
+                  <RotateCcw size={11} />
+                </button>
+              )}
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Commit box */}
+      <div className="p-3 border-t border-edge mt-auto">
+        <textarea
+          value={msg}
+          onChange={(e) => setMsg(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void doCommit();
+          }}
+          placeholder="Commit message"
+          rows={3}
+          className="w-full text-sm resize-none"
+        />
+        <button
+          className="mt-2 w-full flex items-center justify-center gap-2 rounded bg-accent hover:bg-accent-hover text-white py-1.5 text-sm font-medium disabled:opacity-40"
+          disabled={!msg.trim() || (status?.staged.length ?? 0) === 0}
+          onClick={() => void doCommit()}
+          title="Commit staged changes (Ctrl+Enter)"
+        >
+          <MessageSquarePlus size={14} />
+          Commit {status?.staged.length ? `${status.staged.length} file${status.staged.length === 1 ? '' : 's'}` : ''}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FileRow({ file, commitHash }: { file: FileChange; commitHash: string | null }) {
+  const openFileDiff = useApp((s) => s.openFileDiff);
+  const openDiff = useApp((s) => s.openDiff);
+  const active = openDiff?.filePath === file.path && openDiff?.commitHash === commitHash;
+  return (
+    <button
+      className={`flex w-full items-center gap-2 px-3 py-1 text-sm text-left hover:bg-panel2 ${
+        active ? 'bg-accent/10 text-accent' : 'text-fg/90'
+      }`}
+      onClick={() => void openFileDiff({ commitHash, filePath: file.path })}
+      title={file.path}
+    >
+      <StatusIcon status={file.status} />
+      <span className="truncate font-mono text-xs flex-1">{file.path}</span>
+      {file.insertions !== undefined && file.insertions > 0 && <span className="text-add text-xs">+{file.insertions}</span>}
+      {file.deletions !== undefined && file.deletions > 0 && <span className="text-del text-xs">-{file.deletions}</span>}
+    </button>
+  );
+}
+
+function FileList({ files, commitHash }: { files: FileChange[]; commitHash: string | null }) {
+  const [mode, setMode] = useState<'path' | 'tree'>('path');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const tree = useMemo(() => {
+    const root: { name: string; path: string; children: Map<string, never[]> } & { files: FileChange[] } = Object.assign(
+      { name: '', path: '', children: new Map(), files: [] as FileChange[] },
+      {}
+    );
+    const folders = new Map<string, { name: string; files: FileChange[]; sub: Map<string, unknown> }>();
+    folders.set('', { name: '', files: [], sub: new Map() });
+    for (const f of files) {
+      const parts = f.path.split('/');
+      const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+      if (!folders.has(dir)) folders.set(dir, { name: dir, files: [], sub: new Map() });
+      folders.get(dir)!.files.push(f);
+    }
+    return folders;
+  }, [files]);
+
+  const rootFiles = tree.get('')?.files ?? [];
+  const dirs = [...tree.keys()].filter((k) => k !== '').sort();
+
+  const toggleDir = (d: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(d)) next.delete(d);
+      else next.add(d);
+      return next;
+    });
+
+  const dirCount = (d: string) =>
+    files.filter((f) => f.path.startsWith(d + '/')).length;
+
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-edge/60 text-xs text-dim">
+        <span className="flex-1">{files.length} changed file{files.length === 1 ? '' : 's'}</span>
+        <button
+          className={`btn-icon !w-5 !h-5 ${mode === 'path' ? '!text-accent' : ''}`}
+          title="Path view"
+          onClick={() => setMode('path')}
+        >
+          <List size={12} />
+        </button>
+        <button
+          className={`btn-icon !w-5 !h-5 ${mode === 'tree' ? '!text-accent' : ''}`}
+          title="Tree view"
+          onClick={() => setMode('tree')}
+        >
+          <FileText size={12} />
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {mode === 'path' ? (
+          files.map((f) => <FileRow key={f.path} file={f} commitHash={commitHash} />)
+        ) : (
+          <>
+            {dirs.map((d) => (
+              <div key={d}>
+                <button
+                  className="flex w-full items-center gap-1.5 px-3 py-1 text-sm text-left hover:bg-panel2 text-fg/90"
+                  onClick={() => toggleDir(d)}
+                >
+                  {collapsed.has(d) ? <ChevronRight size={12} className="text-faint" /> : <ChevronDown size={12} className="text-faint" />}
+                  <span className="truncate flex-1 font-mono text-xs">{d}/</span>
+                  <span className="text-[10px] text-faint">{dirCount(d)}</span>
+                </button>
+                {!collapsed.has(d) && tree.get(d)!.files.map((f) => <FileRow key={f.path} file={f} commitHash={commitHash} />)}
+              </div>
+            ))}
+            {rootFiles.map((f) => (
+              <FileRow key={f.path} file={f} commitHash={commitHash} />
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function CommitDetailPanel() {
+  const detail = useApp((s) => s.commitDetail);
+  const loading = useApp((s) => s.detailLoading);
+  const selectedCommit = useApp((s) => s.selectedCommit);
+  const selectCommit = useApp((s) => s.selectCommit);
+  const notify = useApp((s) => s.notify);
+  const runAndRefresh = useApp((s) => s.runAndRefresh);
+  const isWip = selectedCommit === WIP_HASH;
+
+  if (loading) {
+    return (
+      <div className="w-[380px] shrink-0 border-l border-edge bg-panel flex items-center justify-center">
+        <Loader2 size={18} className="animate-spin text-dim" />
+      </div>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <div className="w-[380px] shrink-0 border-l border-edge bg-panel flex items-center justify-center px-6 text-center">
+        <p className="text-dim text-sm">Select a commit to view its details and changed files.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-[380px] shrink-0 border-l border-edge bg-panel flex flex-col min-h-0">
+      {/* Header */}
+      <div className="p-3 border-b border-edge">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-sm text-accent">{isWip ? 'WIP' : detail.shortHash}</span>
+          {!isWip && (
+            <button
+              className="btn-icon !w-5 !h-5"
+              title="Copy hash"
+              onClick={() => {
+                void navigator.clipboard.writeText(detail.hash);
+                notify('success', 'Hash copied');
+              }}
+            >
+              <Copy size={11} />
+            </button>
+          )}
+          <span className="flex-1" />
+          <Dropdown
+            align="right"
+            trigger={
+              <button className="btn text-xs">
+                Commit Actions <ChevronDown size={11} />
+              </button>
+            }
+            width={220}
+          >
+            {(close) =>
+              isWip ? (
+                <MenuItem label="Working directory changes" onClick={close} />
+              ) : (
+                <>
+                  <MenuItem
+                    icon={<Copy size={13} />}
+                    label="Copy full hash"
+                    onClick={() => {
+                      close();
+                      void navigator.clipboard.writeText(detail.files ? detail.hash : detail.hash);
+                      notify('success', 'Hash copied');
+                    }}
+                  />
+                  <MenuItem
+                    icon={<RotateCcw size={13} />}
+                    label="Revert commit"
+                    onClick={() => {
+                      close();
+                      void runAndRefresh(() => api.revertCommit(detail.hash), `Reverted ${detail.shortHash}`);
+                    }}
+                  />
+                </>
+              )
+            }
+          </Dropdown>
+        </div>
+        <h3 className="mt-2 text-sm font-medium text-fg selectable">{detail.message}</h3>
+        {detail.body && <pre className="mt-1 text-xs text-dim whitespace-pre-wrap font-sans selectable">{detail.body}</pre>}
+      </div>
+
+      {/* Author row */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-edge text-xs text-dim">
+        {detail.authorName ? (
+          <>
+            <Avatar name={detail.authorName} email={detail.authorEmail} avatarHash={detail.avatarHash} size={20} />
+            <span className="text-fg">{detail.authorName}</span>
+            <span>·</span>
+            <span>{formatDate(detail.date)}</span>
+          </>
+        ) : (
+          <span>Working directory</span>
+        )}
+        <span className="flex-1" />
+        {detail.parents.map((p) => (
+          <button
+            key={p}
+            className="font-mono text-accent hover:underline"
+            title={`Go to parent ${p.slice(0, 7)}`}
+            onClick={() => void selectCommit(p)}
+          >
+            parent: {p.slice(0, 7)}
+          </button>
+        ))}
+      </div>
+
+      {/* Stats */}
+      <div className="flex items-center gap-3 px-3 py-1.5 border-b border-edge text-xs">
+        <span className="text-dim">{detail.files.length} changed</span>
+        <span className="text-add">+{detail.insertions} added</span>
+        <span className="text-del">-{detail.deletions} deleted</span>
+      </div>
+
+      {isWip ? <WorkdirPanel /> : <FileList files={detail.files} commitHash={detail.hash} />}
+    </div>
+  );
+}
+
+

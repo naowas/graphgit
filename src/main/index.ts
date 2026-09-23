@@ -1,0 +1,65 @@
+import { app, BrowserWindow, shell } from 'electron';
+import path from 'node:path';
+import { registerIpc } from './ipc';
+
+let mainWindow: BrowserWindow | null = null;
+let currentRepo: string | null = null;
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 640,
+    backgroundColor: '#181a1f',
+    title: 'GraphGit',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false
+    }
+  });
+
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+  }
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+app.whenReady().then(() => {
+  registerIpc(
+    () => mainWindow,
+    () => currentRepo
+  );
+
+  // Track the active repo path (sent from renderer when a tab is focused)
+  const { ipcMain } = require('electron') as typeof import('electron');
+  ipcMain.on('repo:set-active', (_e, repoPath: string) => {
+    currentRepo = repoPath;
+  });
+
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
+
+// Open external links in the default browser
+app.on('web-contents-created', (_e, contents) => {
+  contents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+});
