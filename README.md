@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Electron](https://img.shields.io/badge/Electron-44.4.5-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![React](https://img.shields.io/badge/React-19.3.0-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.3-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS-lightgrey.svg)](#installation--build)
@@ -88,7 +88,7 @@ Inspired by modern visual Git workflows, StrataGit combines the responsiveness o
 └──────────────────────────┬─────────────────────────────┘
                            │
 ┌──────────────────────────▼─────────────────────────────┐
-│                  React 18 Renderer Process             │
+│                  React 19 Renderer Process             │
 │  - TabBar & Launchpad State (Zustand)                  │
 │  - SVG Commit Strata Graph Renderer                   │
 │  - Diff Viewer & File Tree Hierarchy                   │
@@ -187,7 +187,7 @@ stratagit/
 │   │   └── ipc.ts             # Strongly-typed IPC handlers
 │   ├── preload/               # Secure contextBridge preload script
 │   │   └── index.ts
-│   ├── renderer/              # React 18 frontend
+│   ├── renderer/              # React 19 frontend
 │   │   ├── assets/            # Embedded vector assets
 │   │   ├── components/        # UI components
 │   │   │   ├── CommitDetailPanel/ # Changed files tree & commit metadata
