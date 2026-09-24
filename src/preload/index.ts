@@ -46,8 +46,16 @@ export type Api = {
   stashPop(index?: number): Promise<{ ok: boolean }>;
   stashApply(index?: number): Promise<{ ok: boolean }>;
   stashDrop(index?: number): Promise<{ ok: boolean }>;
+  stageHunk(filePath: string, hunkIndex: number): Promise<{ ok: boolean; error?: string }>;
+  unstageHunk(filePath: string, hunkIndex: number): Promise<{ ok: boolean; error?: string }>;
+  discardHunk(filePath: string, hunkIndex: number): Promise<{ ok: boolean; error?: string }>;
+  stageLines(filePath: string, hunkIndex: number, lineIndices: number[]): Promise<{ ok: boolean; error?: string }>;
+  unstageLines(filePath: string, hunkIndex: number, lineIndices: number[]): Promise<{ ok: boolean; error?: string }>;
+  discardLines(filePath: string, hunkIndex: number, lineIndices: number[]): Promise<{ ok: boolean; error?: string }>;
   revertHunk(hash: string, filePath: string, hunkIndex: number): Promise<{ ok: boolean }>;
   blame(filePath: string): Promise<string>;
+  getBlame(filePath: string): Promise<import('../shared/types').BlameLine[]>;
+  getFileHistory(filePath: string): Promise<import('../shared/types').FileHistoryEntry[]>;
   openTerminal(): Promise<{ ok: boolean; error?: string }>;
   openInEditor(filePath: string): Promise<{ ok: boolean; error?: string }>;
   setActiveRepo(path: string): void;
@@ -98,8 +106,16 @@ const api: Api = {
   stashPop: (index) => call('git:stash-pop', index),
   stashApply: (index) => call('git:stash-apply', index),
   stashDrop: (index) => call('git:stash-drop', index),
+  stageHunk: (filePath, hunkIndex) => call('git:stage-hunk', filePath, hunkIndex),
+  unstageHunk: (filePath, hunkIndex) => call('git:unstage-hunk', filePath, hunkIndex),
+  discardHunk: (filePath, hunkIndex) => call('git:discard-hunk', filePath, hunkIndex),
+  stageLines: (filePath, hunkIndex, lineIndices) => call('git:stage-lines', filePath, hunkIndex, lineIndices),
+  unstageLines: (filePath, hunkIndex, lineIndices) => call('git:unstage-lines', filePath, hunkIndex, lineIndices),
+  discardLines: (filePath, hunkIndex, lineIndices) => call('git:discard-lines', filePath, hunkIndex, lineIndices),
   revertHunk: (hash, filePath, hunkIndex) => call('git:revert-hunk', hash, filePath, hunkIndex),
   blame: (filePath) => call('git:blame', filePath),
+  getBlame: (filePath) => call('git:get-blame', filePath),
+  getFileHistory: (filePath) => call('git:get-file-history', filePath),
   openTerminal: () => call('app:open-terminal'),
   openInEditor: (filePath) => call('app:open-in-editor', filePath),
   setActiveRepo: (path: string) => ipcRenderer.send('repo:set-active', path),

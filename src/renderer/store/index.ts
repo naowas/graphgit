@@ -6,7 +6,9 @@ import {
   FileStatusKind,
   GraphResult,
   GitStatus,
-  StashInfo
+  StashInfo,
+  DiffViewMode,
+  DiffActiveTab
 } from '../../shared/types';
 import { api, unwrap } from '../lib/api';
 
@@ -39,6 +41,8 @@ interface AppState {
   sidebarWidth: number;
   diffHeight: number;
   diffMaximized: boolean;
+  diffViewMode: DiffViewMode;
+  diffActiveTab: DiffActiveTab;
   toast: { kind: 'info' | 'error' | 'success'; text: string } | null;
   filter: string;
   commitLimit: number;
@@ -58,6 +62,9 @@ interface AppActions {
   closeDiff(): void;
   setDiffHeight(h: number): void;
   toggleDiffMaximized(): void;
+  setDiffViewMode(mode: DiffViewMode): void;
+  setDiffActiveTab(tab: DiffActiveTab): void;
+  reloadCurrentDiff(): Promise<void>;
   setFilter(f: string): void;
   toggleSidebar(): void;
   setSidebarWidth(w: number): void;
@@ -87,6 +94,8 @@ export const useApp = create<AppStore>((set, get) => ({
   sidebarWidth: 240,
   diffHeight: 360,
   diffMaximized: true,
+  diffViewMode: (typeof localStorage !== 'undefined' && (localStorage.getItem('stratagit:diffViewMode') as DiffViewMode)) || 'unified',
+  diffActiveTab: 'diff',
   toast: null,
   filter: '',
   commitLimit: 300,
@@ -256,6 +265,33 @@ export const useApp = create<AppStore>((set, get) => ({
 
   toggleDiffMaximized() {
     set({ diffMaximized: !get().diffMaximized });
+  },
+
+  setDiffViewMode(mode) {
+    try {
+      localStorage.setItem('stratagit:diffViewMode', mode);
+    } catch {}
+    set({ diffViewMode: mode });
+  },
+
+  setDiffActiveTab(tab) {
+    set({ diffActiveTab: tab });
+  },
+
+  async reloadCurrentDiff() {
+    const d = get().openDiff;
+    if (!d) return;
+    try {
+      const diff = await api.getFileDiff(d.commitHash ?? '', d.filePath, {
+        staged: d.staged,
+        worktree: d.worktree ?? d.commitHash === null
+      });
+      set({
+        fileDiff: diff ?? { path: d.filePath, hunks: [], insertions: 0, deletions: 0 }
+      });
+    } catch (err) {
+      console.error('Failed to reload diff:', err);
+    }
   },
 
   setFilter(f) {

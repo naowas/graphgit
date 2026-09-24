@@ -44,6 +44,16 @@ import {
   pushSetUpstream,
   deleteBranchEx
 } from './git/history';
+import {
+  stageHunk,
+  unstageHunk,
+  discardHunk,
+  stageLines,
+  unstageLines,
+  discardLines,
+  getBlameLines,
+  getFileHistory
+} from './git/hunk-actions';
 
 /** Recently opened repos persisted in the user config dir. */
 const recentFile = () => path.join(os.homedir(), '.config', 'stratagit', 'recent-repos.json');
@@ -259,13 +269,49 @@ export function registerIpc(getWin: () => BrowserWindow | null, getRepo: () => s
     return { ok: true };
   });
 
+  handle('git:stage-hunk', async (filePath: string, hunkIndex: number) => {
+    await stageHunk(requireRepo(), filePath, hunkIndex);
+    return { ok: true };
+  });
+
+  handle('git:unstage-hunk', async (filePath: string, hunkIndex: number) => {
+    await unstageHunk(requireRepo(), filePath, hunkIndex);
+    return { ok: true };
+  });
+
+  handle('git:discard-hunk', async (filePath: string, hunkIndex: number) => {
+    await discardHunk(requireRepo(), filePath, hunkIndex);
+    return { ok: true };
+  });
+
+  handle('git:stage-lines', async (filePath: string, hunkIndex: number, lineIndices: number[]) => {
+    await stageLines(requireRepo(), filePath, hunkIndex, lineIndices);
+    return { ok: true };
+  });
+
+  handle('git:unstage-lines', async (filePath: string, hunkIndex: number, lineIndices: number[]) => {
+    await unstageLines(requireRepo(), filePath, hunkIndex, lineIndices);
+    return { ok: true };
+  });
+
+  handle('git:discard-lines', async (filePath: string, hunkIndex: number, lineIndices: number[]) => {
+    await discardLines(requireRepo(), filePath, hunkIndex, lineIndices);
+    return { ok: true };
+  });
+
   handle('git:blame', async (filePath: string) => {
     return withGit(requireRepo(), (g) => g.raw(['blame', '--date=short', '--', filePath]));
+  });
+  handle('git:get-blame', async (filePath: string) => {
+    return getBlameLines(requireRepo(), filePath);
   });
   handle('git:file-history', async (filePath: string) => {
     return withGit(requireRepo(), (g) =>
       g.log(['--pretty=format:%h%x09%s%x09%an', '--', filePath])
     );
+  });
+  handle('git:get-file-history', async (filePath: string) => {
+    return getFileHistory(requireRepo(), filePath);
   });
 
   handle('app:open-terminal', async () => {

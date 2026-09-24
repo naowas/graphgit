@@ -133,6 +133,29 @@ export interface DiffRange {
   staged?: boolean;
 }
 
+export interface BlameLine {
+  lineNo: number;
+  commitHash: string;
+  shortHash: string;
+  author: string;
+  authorEmail: string;
+  date: string;
+  summary: string;
+  content: string;
+}
+
+export interface FileHistoryEntry {
+  hash: string;
+  shortHash: string;
+  authorName: string;
+  authorEmail: string;
+  date: string;
+  summary: string;
+}
+
+export type DiffViewMode = 'unified' | 'split';
+export type DiffActiveTab = 'diff' | 'blame' | 'history';
+
 // IPC API exposed via contextBridge
 export interface StrataGitApi {
   openRepo(path: string): Promise<{ ok: boolean; repo?: RepoSummary; error?: string }>;
@@ -149,6 +172,12 @@ export interface StrataGitApi {
   stageAll(): Promise<GitStatus>;
   unstageAll(): Promise<GitStatus>;
   discardFile(path: string): Promise<GitStatus>;
+  stageHunk(filePath: string, hunkIndex: number): Promise<{ ok: boolean; error?: string }>;
+  unstageHunk(filePath: string, hunkIndex: number): Promise<{ ok: boolean; error?: string }>;
+  discardHunk(filePath: string, hunkIndex: number): Promise<{ ok: boolean; error?: string }>;
+  stageLines(filePath: string, hunkIndex: number, lineIndices: number[]): Promise<{ ok: boolean; error?: string }>;
+  unstageLines(filePath: string, hunkIndex: number, lineIndices: number[]): Promise<{ ok: boolean; error?: string }>;
+  discardLines(filePath: string, hunkIndex: number, lineIndices: number[]): Promise<{ ok: boolean; error?: string }>;
   commit(message: string): Promise<{ ok: boolean; error?: string }>;
   pull(): Promise<{ ok: boolean; error?: string }>;
   push(): Promise<{ ok: boolean; error?: string }>;
@@ -174,6 +203,8 @@ export interface StrataGitApi {
   stashDrop(index?: number): Promise<{ ok: boolean; error?: string }>;
   revertHunk(hash: string, filePath: string, hunkIndex: number): Promise<{ ok: boolean; error?: string }>;
   blame(filePath: string): Promise<string>;
+  getBlame(filePath: string): Promise<BlameLine[]>;
+  getFileHistory(filePath: string): Promise<FileHistoryEntry[]>;
   openTerminal(): Promise<{ ok: boolean; error?: string }>;
   openInEditor(filePath: string): Promise<{ ok: boolean; error?: string }>;
   minimizeWindow(): Promise<boolean>;
@@ -186,3 +217,4 @@ export interface StrataGitApi {
 
 export type ApiEvent = 'repo-updated';
 export type GraphGitApi = StrataGitApi;
+

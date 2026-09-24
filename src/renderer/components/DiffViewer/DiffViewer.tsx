@@ -1,64 +1,24 @@
 import React from 'react';
-import { RotateCcw, X, Loader2, FileText, Maximize2, Rows2 } from 'lucide-react';
-import { DiffHunk, DiffLineKind } from '../../../shared/types';
+import {
+  X,
+  Loader2,
+  FileText,
+  Maximize2,
+  Rows2,
+  Columns2,
+  AlignLeft,
+  History,
+  UserCheck,
+  FileCode,
+  ExternalLink
+} from 'lucide-react';
 import { useApp } from '../../store';
 import { api } from '../../lib/api';
 import { StatusIcon } from '../CommitDetailPanel/CommitDetailPanel';
-
-const LINE_NO_W = 46;
-
-function lineClass(kind: DiffLineKind): string {
-  switch (kind) {
-    case 'add':
-      return 'bg-add-bg text-add/90';
-    case 'del':
-      return 'bg-del-bg text-del/90';
-    default:
-      return '';
-  }
-}
-
-function Hunk({ hunk, hunkIndex, canRevert }: { hunk: DiffHunk; hunkIndex: number; canRevert: boolean }) {
-  const openDiff = useApp((s) => s.openDiff);
-  const runAndRefresh = useApp((s) => s.runAndRefresh);
-
-  const revertHunk = async () => {
-    if (!openDiff || openDiff.commitHash === null) return;
-    await runAndRefresh(
-      () => api.revertHunk(openDiff.commitHash ?? '', openDiff.filePath, hunkIndex),
-      'Hunk reverted'
-    );
-  };
-
-  return (
-    <div className="border-b border-edge/50">
-      <div className="flex items-center gap-2 bg-panel2/80 px-2 py-1 text-xs text-dim font-mono sticky top-0 z-[1] backdrop-blur-sm border-b border-edge/30">
-        <span className="flex-1 truncate">{hunk.header}</span>
-        {canRevert && (
-          <button className="btn-icon !w-5 !h-5 hover:!text-del" title="Revert this hunk" onClick={() => void revertHunk()}>
-            <RotateCcw size={11} />
-          </button>
-        )}
-      </div>
-      <div className="font-mono text-xs leading-5 selectable">
-        {hunk.lines.map((l, i) => (
-          <div key={i} className={`flex ${lineClass(l.kind)}`}>
-            <span className="w-[46px] shrink-0 text-right pr-1 text-faint/70 select-none border-r border-edge/30">
-              {l.oldNo ?? ''}
-            </span>
-            <span className="w-[46px] shrink-0 text-right pr-1 text-faint/70 select-none border-r border-edge/30">
-              {l.newNo ?? ''}
-            </span>
-            <span className="w-4 shrink-0 text-center select-none opacity-60">
-              {l.kind === 'add' ? '+' : l.kind === 'del' ? '-' : ''}
-            </span>
-            <span className="whitespace-pre-wrap break-all pr-3 flex-1 min-w-0">{l.content}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+import { UnifiedDiffView } from './UnifiedDiffView';
+import { SplitDiffView } from './SplitDiffView';
+import { BlameView } from './BlameView';
+import { FileHistoryView } from './FileHistoryView';
 
 export function DiffViewer() {
   const openDiff = useApp((s) => s.openDiff);
@@ -69,6 +29,10 @@ export function DiffViewer() {
   const diffMaximized = useApp((s) => s.diffMaximized);
   const setDiffHeight = useApp((s) => s.setDiffHeight);
   const toggleDiffMaximized = useApp((s) => s.toggleDiffMaximized);
+  const diffViewMode = useApp((s) => s.diffViewMode);
+  const setDiffViewMode = useApp((s) => s.setDiffViewMode);
+  const diffActiveTab = useApp((s) => s.diffActiveTab);
+  const setDiffActiveTab = useApp((s) => s.setDiffActiveTab);
 
   if (!openDiff) return null;
 
@@ -88,6 +52,13 @@ export function DiffViewer() {
     window.addEventListener('mouseup', onMouseUp);
   };
 
+  const handleOpenInEditor = () => {
+    if (!openDiff) return;
+    api.openInEditor(openDiff.filePath).catch((err) => {
+      console.error('Failed to open file in editor:', err);
+    });
+  };
+
   return (
     <div
       className={`relative min-w-0 min-h-0 flex flex-col bg-base overflow-hidden border-t border-edge ${
@@ -104,60 +75,170 @@ export function DiffViewer() {
         />
       )}
 
-      {/* Diff header */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-panel border-b border-edge shrink-0 select-none z-10">
+      {/* Main Diff Header Toolbar */}
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-panel border-b border-edge shrink-0 select-none z-10 flex-wrap">
+        {/* File icon, path & status badge */}
         <StatusIcon status={openDiff.status ?? (openDiff.staged ? 'added' : 'modified')} />
-        <span className="font-mono text-sm text-fg truncate">{openDiff.filePath}</span>
+        <span className="font-mono text-sm text-fg truncate max-w-xs sm:max-w-md font-medium">
+          {openDiff.filePath}
+        </span>
+
         {openDiff.commitHash === null && (
-          <span className="text-[10px] rounded bg-panel3 px-1.5 py-px text-warn">
+          <span className="text-[10px] rounded bg-panel3 px-1.5 py-px text-warn font-semibold border border-warn/30">
             {openDiff.staged ? 'STAGED' : 'WORKING DIR'}
           </span>
         )}
+
         {fileDiff && (fileDiff.insertions > 0 || fileDiff.deletions > 0) && (
-          <span className="text-xs text-dim shrink-0">
-            <span className="text-add">+{fileDiff.insertions}</span> <span className="text-del">-{fileDiff.deletions}</span>
+          <span className="text-xs text-dim shrink-0 font-mono">
+            <span className="text-add font-medium">+{fileDiff.insertions}</span>{' '}
+            <span className="text-del font-medium">-{fileDiff.deletions}</span>
           </span>
         )}
+
+        {/* Center / Navigation Tabs: Diff | Blame | History */}
+        <div className="flex items-center gap-0.5 bg-panel2 p-0.5 rounded-md border border-edge/50 ml-2">
+          <button
+            className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${
+              diffActiveTab === 'diff'
+                ? 'bg-panel text-fg font-medium shadow-xs'
+                : 'text-dim hover:text-fg'
+            }`}
+            onClick={() => setDiffActiveTab('diff')}
+            title="View code changes diff"
+          >
+            <FileCode size={12} className={diffActiveTab === 'diff' ? 'text-accent' : ''} />
+            <span>Diff</span>
+          </button>
+
+          <button
+            className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${
+              diffActiveTab === 'blame'
+                ? 'bg-panel text-fg font-medium shadow-xs'
+                : 'text-dim hover:text-fg'
+            }`}
+            onClick={() => setDiffActiveTab('blame')}
+            title="Inspect line-by-line git blame"
+          >
+            <UserCheck size={12} className={diffActiveTab === 'blame' ? 'text-accent' : ''} />
+            <span>Blame</span>
+          </button>
+
+          <button
+            className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${
+              diffActiveTab === 'history'
+                ? 'bg-panel text-fg font-medium shadow-xs'
+                : 'text-dim hover:text-fg'
+            }`}
+            onClick={() => setDiffActiveTab('history')}
+            title="Explore file commit revision history"
+          >
+            <History size={12} className={diffActiveTab === 'history' ? 'text-accent' : ''} />
+            <span>History</span>
+          </button>
+        </div>
+
         <span className="flex-1" />
+
+        {/* Diff Mode Toggle (Unified vs Split) - only when Diff tab is active */}
+        {diffActiveTab === 'diff' && (
+          <div className="flex items-center gap-0.5 bg-panel2 p-0.5 rounded-md border border-edge/50">
+            <button
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${
+                diffViewMode === 'unified'
+                  ? 'bg-panel text-fg font-medium shadow-xs'
+                  : 'text-dim hover:text-fg'
+              }`}
+              title="Unified single-column diff"
+              onClick={() => setDiffViewMode('unified')}
+            >
+              <AlignLeft size={12} />
+              <span className="hidden md:inline text-[11px]">Unified</span>
+            </button>
+            <button
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${
+                diffViewMode === 'split'
+                  ? 'bg-panel text-fg font-medium shadow-xs'
+                  : 'text-dim hover:text-fg'
+              }`}
+              title="Side-by-side 2-column split diff"
+              onClick={() => setDiffViewMode('split')}
+            >
+              <Columns2 size={12} />
+              <span className="hidden md:inline text-[11px]">Split</span>
+            </button>
+          </div>
+        )}
+
+        {/* Open in Editor button */}
         <button
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs text-dim hover:text-fg hover:bg-panel3 border border-edge/40 transition-colors"
-          title={diffMaximized ? 'Switch to split view (show commit graph)' : 'Switch to full diff view (hide graph)'}
+          className="flex items-center gap-1 px-2 py-1 rounded text-xs text-dim hover:text-fg hover:bg-panel3 border border-edge/40 transition-colors"
+          title="Open this file in default editor or system handler"
+          onClick={handleOpenInEditor}
+        >
+          <ExternalLink size={12} />
+          <span className="hidden lg:inline text-[11px]">Edit on Disk</span>
+        </button>
+
+        {/* Maximize / Restore Toggle */}
+        <button
+          className="flex items-center gap-1 px-1.5 py-1 rounded text-xs text-dim hover:text-fg hover:bg-panel3 border border-edge/40 transition-colors"
+          title={diffMaximized ? 'Restore split view (show commit graph)' : 'Full diff view (hide graph)'}
           onClick={toggleDiffMaximized}
         >
           {diffMaximized ? (
             <>
               <Rows2 size={12} className="text-dim" />
-              <span className="text-[11px] font-medium hidden sm:inline">Split View</span>
+              <span className="text-[11px] hidden sm:inline">Split View</span>
             </>
           ) : (
             <>
               <Maximize2 size={12} className="text-accent" />
-              <span className="text-[11px] font-medium text-accent hidden sm:inline">Full Diff</span>
+              <span className="text-[11px] text-accent hidden sm:inline">Full Diff</span>
             </>
           )}
         </button>
+
+        {/* Close Button */}
         <button className="btn-icon !w-6 !h-6" title="Close diff (Esc)" onClick={closeDiff}>
           <X size={13} />
         </button>
       </div>
 
+      {/* Main Diff Content Container */}
       <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0 bg-base">
-        {loading ? (
+        {diffActiveTab === 'blame' ? (
+          <BlameView filePath={openDiff.filePath} />
+        ) : diffActiveTab === 'history' ? (
+          <FileHistoryView filePath={openDiff.filePath} />
+        ) : loading ? (
           <div className="flex items-center justify-center h-full text-dim">
-            <Loader2 size={18} className="animate-spin" />
+            <Loader2 size={18} className="animate-spin text-accent" />
           </div>
         ) : fileDiff?.isBinary ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-dim text-sm">
-            <FileText size={22} className="opacity-50" />
-            Binary file cannot be displayed
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-dim text-sm py-16">
+            <FileText size={24} className="opacity-50" />
+            <span>Binary file cannot be displayed inline</span>
           </div>
         ) : !fileDiff || fileDiff.hunks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-dim text-sm">
-            <FileText size={22} className="opacity-50" />
-            {openDiff.commitHash === null ? 'No textual changes (empty file)' : 'No diff available (empty file or identical)'}
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-dim text-sm py-16">
+            <FileText size={24} className="opacity-50" />
+            <span>
+              {openDiff.commitHash === null
+                ? 'No textual changes in working directory (empty or clean file)'
+                : 'No diff available (empty file or identical content)'}
+            </span>
           </div>
+        ) : diffViewMode === 'split' ? (
+          <SplitDiffView
+            hunks={fileDiff.hunks}
+            isCommitted={openDiff.commitHash !== null}
+          />
         ) : (
-          fileDiff.hunks.map((h, i) => <Hunk key={i} hunk={h} hunkIndex={i} canRevert={openDiff.commitHash !== null} />)
+          <UnifiedDiffView
+            hunks={fileDiff.hunks}
+            isCommitted={openDiff.commitHash !== null}
+          />
         )}
       </div>
     </div>
