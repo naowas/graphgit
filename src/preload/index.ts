@@ -26,7 +26,8 @@ export type Api = {
   commit(message: string): Promise<{ ok: boolean }>;
   pull(): Promise<{ ok: boolean }>;
   push(): Promise<{ ok: boolean }>;
-  fetch(): Promise<{ ok: boolean }>;
+  fetch(remote?: string): Promise<{ ok: boolean }>;
+  rebaseBranch(upstream: string): Promise<{ ok: boolean }>;
   mergeBranch(name: string): Promise<{ ok: boolean }>;
   checkoutBranch(name: string): Promise<{ ok: boolean }>;
   createBranch(name: string, atHash?: string): Promise<{ ok: boolean }>;
@@ -64,7 +65,22 @@ export type Api = {
   cherryPick(hash: string): Promise<{ ok: boolean; hasConflicts?: boolean; error?: string }>;
   getCommitsForRebase(baseHash: string): Promise<import('../shared/types').RebaseStep[]>;
   executeInteractiveRebase(baseHash: string, steps: import('../shared/types').RebaseStep[]): Promise<{ ok: boolean; hasConflicts?: boolean; error?: string }>;
+  getTags(): Promise<import('../shared/types').TagInfo[]>;
+  createTag(name: string, commitHash?: string, message?: string): Promise<{ ok: boolean; error?: string }>;
+  deleteTag(name: string, deleteRemote?: boolean, remoteName?: string): Promise<{ ok: boolean; error?: string }>;
+  pushTag(name: string, remoteName?: string): Promise<{ ok: boolean; error?: string }>;
+  getRemotes(): Promise<import('../shared/types').RemoteInfo[]>;
+  addRemote(name: string, url: string): Promise<{ ok: boolean; error?: string }>;
+  renameRemote(oldName: string, newName: string): Promise<{ ok: boolean; error?: string }>;
+  setRemoteUrl(name: string, url: string): Promise<{ ok: boolean; error?: string }>;
+  removeRemote(name: string): Promise<{ ok: boolean; error?: string }>;
+  pruneRemote(name: string): Promise<{ ok: boolean; error?: string }>;
+  getSubmodules(): Promise<import('../shared/types').SubmoduleInfo[]>;
+  updateSubmodules(path?: string): Promise<{ ok: boolean; error?: string }>;
+  getWorktrees(): Promise<import('../shared/types').WorktreeInfo[]>;
+  removeWorktree(worktreePath: string, force?: boolean): Promise<{ ok: boolean; error?: string }>;
   openTerminal(): Promise<{ ok: boolean; error?: string }>;
+  runCommand(command: string): Promise<{ ok: boolean; stdout?: string; stderr?: string; exitCode?: number; error?: string }>;
   openInEditor(filePath: string): Promise<{ ok: boolean; error?: string }>;
   setActiveRepo(path: string): void;
   minimizeWindow(): Promise<boolean>;
@@ -94,8 +110,9 @@ const api: Api = {
   commit: (message) => call('git:commit', message),
   pull: () => call('git:pull'),
   push: () => call('git:push'),
-  fetch: () => call('git:fetch'),
+  fetch: (remote?: string) => call('git:fetch', remote) as Promise<{ ok: boolean }>,
   mergeBranch: (name) => call('git:merge', name),
+  rebaseBranch: (upstream: string) => call('git:rebase-branch', upstream) as Promise<{ ok: boolean }>,
   checkoutBranch: (name) => call('git:checkout', name),
   createBranch: (name, atHash) => call('git:branch-create', name, atHash),
   deleteBranch: (name, opts) => call('git:branch-delete', name, opts),
@@ -132,7 +149,22 @@ const api: Api = {
   cherryPick: (hash) => call('git:cherry-pick', hash),
   getCommitsForRebase: (baseHash) => call('git:get-commits-for-rebase', baseHash),
   executeInteractiveRebase: (baseHash, steps) => call('git:execute-interactive-rebase', baseHash, steps),
+  getTags: () => call('git:get-tags'),
+  createTag: (name, commitHash, message) => call('git:create-tag', name, commitHash, message),
+  deleteTag: (name, deleteRemote, remoteName) => call('git:delete-tag', name, deleteRemote, remoteName),
+  pushTag: (name, remoteName) => call('git:push-tag', name, remoteName),
+  getRemotes: () => call('git:get-remotes'),
+  addRemote: (name, url) => call('git:add-remote', name, url),
+  renameRemote: (oldName, newName) => call('git:rename-remote', oldName, newName),
+  setRemoteUrl: (name, url) => call('git:set-remote-url', name, url),
+  removeRemote: (name) => call('git:remove-remote', name),
+  pruneRemote: (name) => call('git:prune-remote', name),
+  getSubmodules: () => call('git:get-submodules'),
+  updateSubmodules: (path?: string) => call('git:update-submodules', path) as Promise<{ ok: boolean; error?: string }>,
+  getWorktrees: () => call('git:get-worktrees'),
+  removeWorktree: (worktreePath, force) => call('git:remove-worktree', worktreePath, force),
   openTerminal: () => call('app:open-terminal'),
+  runCommand: (command: string) => call('app:run-command', command) as Promise<{ ok: boolean; stdout?: string; stderr?: string; exitCode?: number; error?: string }>,
   openInEditor: (filePath) => call('app:open-in-editor', filePath),
   setActiveRepo: (path: string) => ipcRenderer.send('repo:set-active', path),
   minimizeWindow: () => call('window:minimize'),

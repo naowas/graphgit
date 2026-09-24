@@ -9,7 +9,11 @@ import {
   StashInfo,
   DiffViewMode,
   DiffActiveTab,
-  RepoOperationState
+  RepoOperationState,
+  TagInfo,
+  RemoteInfo,
+  SubmoduleInfo,
+  WorktreeInfo
 } from '../../shared/types';
 import { api, unwrap } from '../lib/api';
 
@@ -31,6 +35,10 @@ interface AppState {
   status: GitStatus | null;
   log: GraphResult | null;
   branches: { local: BranchInfo[]; remote: BranchInfo[] };
+  tags: TagInfo[];
+  remotes: RemoteInfo[];
+  submodules: SubmoduleInfo[];
+  worktrees: WorktreeInfo[];
   stashes: StashInfo[];
   selectedCommit: string | null;
   commitDetail: CommitDetail | null;
@@ -47,6 +55,12 @@ interface AppState {
   operationState: RepoOperationState | null;
   conflictedFileToResolve: string | null;
   rebaseModalBaseCommit: string | null;
+  tagModalCommit: string | null;
+  addRemoteModalOpen: boolean;
+  commandPaletteOpen: boolean;
+  terminalDrawerOpen: boolean;
+  terminalDrawerHeight: number;
+  shortcutsModalOpen: boolean;
   toast: { kind: 'info' | 'error' | 'success'; text: string } | null;
   filter: string;
   commitLimit: number;
@@ -75,6 +89,16 @@ interface AppActions {
   continueRepoOperation(): Promise<void>;
   openRebaseModal(baseCommitHash: string): void;
   closeRebaseModal(): void;
+  openCreateTagModal(commitHash?: string): void;
+  closeCreateTagModal(): void;
+  openAddRemoteModal(): void;
+  closeAddRemoteModal(): void;
+  openCommandPalette(): void;
+  closeCommandPalette(): void;
+  toggleCommandPalette(): void;
+  toggleTerminalDrawer(): void;
+  setTerminalDrawerHeight(h: number): void;
+  toggleShortcutsModal(): void;
   cherryPickCommit(hash: string): Promise<void>;
   setFilter(f: string): void;
   toggleSidebar(): void;
@@ -94,6 +118,10 @@ export const useApp = create<AppStore>((set, get) => ({
   status: null,
   log: null,
   branches: { local: [], remote: [] },
+  tags: [],
+  remotes: [],
+  submodules: [],
+  worktrees: [],
   stashes: [],
   selectedCommit: null,
   commitDetail: null,
@@ -110,6 +138,12 @@ export const useApp = create<AppStore>((set, get) => ({
   operationState: null,
   conflictedFileToResolve: null,
   rebaseModalBaseCommit: null,
+  tagModalCommit: null,
+  addRemoteModalOpen: false,
+  commandPaletteOpen: false,
+  terminalDrawerOpen: false,
+  terminalDrawerHeight: 220,
+  shortcutsModalOpen: false,
   toast: null,
   filter: '',
   commitLimit: 300,
@@ -166,7 +200,16 @@ export const useApp = create<AppStore>((set, get) => ({
       api.setActiveRepo(activeTab);
       void get().refresh();
     } else {
-      set({ status: null, log: null, branches: { local: [], remote: [] }, stashes: [] });
+      set({
+        status: null,
+        log: null,
+        branches: { local: [], remote: [] },
+        tags: [],
+        remotes: [],
+        submodules: [],
+        worktrees: [],
+        stashes: []
+      });
     }
   },
 
@@ -181,14 +224,18 @@ export const useApp = create<AppStore>((set, get) => ({
     if (!repo) return;
     const limit = get().commitLimit || 300;
     try {
-      const [status, log, branches, stashes, operationState] = await Promise.all([
+      const [status, log, branches, stashes, operationState, tags, remotes, submodules, worktrees] = await Promise.all([
         unwrap(api.getStatus()),
         unwrap(api.getLog(limit)),
         unwrap(api.getBranches()),
         unwrap(api.getStashes()),
-        unwrap(api.getRepoOperationState()).catch(() => null)
+        unwrap(api.getRepoOperationState()).catch(() => null),
+        unwrap(api.getTags()).catch(() => []),
+        unwrap(api.getRemotes()).catch(() => []),
+        unwrap(api.getSubmodules()).catch(() => []),
+        unwrap(api.getWorktrees()).catch(() => [])
       ]);
-      set({ status, log, branches, stashes, operationState });
+      set({ status, log, branches, stashes, operationState, tags, remotes, submodules, worktrees });
     } catch (err) {
       get().notify('error', String(err).replace('Error: ', ''));
     }
@@ -337,6 +384,46 @@ export const useApp = create<AppStore>((set, get) => ({
 
   closeRebaseModal() {
     set({ rebaseModalBaseCommit: null });
+  },
+
+  openCreateTagModal(commitHash = 'HEAD') {
+    set({ tagModalCommit: commitHash });
+  },
+
+  closeCreateTagModal() {
+    set({ tagModalCommit: null });
+  },
+
+  openAddRemoteModal() {
+    set({ addRemoteModalOpen: true });
+  },
+
+  closeAddRemoteModal() {
+    set({ addRemoteModalOpen: false });
+  },
+
+  openCommandPalette() {
+    set({ commandPaletteOpen: true });
+  },
+
+  closeCommandPalette() {
+    set({ commandPaletteOpen: false });
+  },
+
+  toggleCommandPalette() {
+    set({ commandPaletteOpen: !get().commandPaletteOpen });
+  },
+
+  toggleTerminalDrawer() {
+    set({ terminalDrawerOpen: !get().terminalDrawerOpen });
+  },
+
+  setTerminalDrawerHeight(h) {
+    set({ terminalDrawerHeight: Math.max(120, Math.min(600, h)) });
+  },
+
+  toggleShortcutsModal() {
+    set({ shortcutsModalOpen: !get().shortcutsModalOpen });
   },
 
   async cherryPickCommit(hash) {

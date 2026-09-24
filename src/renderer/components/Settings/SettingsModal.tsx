@@ -10,7 +10,8 @@ import {
   Info,
   Terminal,
   Layers,
-  ChevronRight
+  ChevronRight,
+  RefreshCw
 } from 'lucide-react';
 import {
   useSettings,
@@ -41,10 +42,14 @@ export function SettingsModal() {
     setCustomCodeFont,
     graphRowHeight,
     setGraphRowHeight,
+    autoFetch,
+    setAutoFetch,
+    autoFetchInterval,
+    setAutoFetchInterval,
     resetDefaults
   } = useSettings();
 
-  const [activeTab, setActiveTab] = useState<'themes' | 'typography' | 'about'>('themes');
+  const [activeTab, setActiveTab] = useState<'themes' | 'typography' | 'git' | 'about'>('themes');
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -115,6 +120,19 @@ export function SettingsModal() {
               <Type size={15} className={activeTab === 'typography' ? 'text-accent' : 'text-dim'} />
               <span className="flex-1">Typography & Fonts</span>
               {activeTab === 'typography' && <ChevronRight size={13} />}
+            </button>
+
+            <button
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-left transition-all ${
+                activeTab === 'git'
+                  ? 'bg-accent/15 text-accent border border-accent/20 font-semibold'
+                  : 'text-dim hover:text-fg hover:bg-panel2'
+              }`}
+              onClick={() => setActiveTab('git')}
+            >
+              <RefreshCw size={15} className={activeTab === 'git' ? 'text-accent' : 'text-dim'} />
+              <span className="flex-1">Git &amp; Sync</span>
+              {activeTab === 'git' && <ChevronRight size={13} />}
             </button>
 
             <button
@@ -420,6 +438,80 @@ export function SettingsModal() {
                       <span>applySettingsToDOM(theme);</span>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'git' && (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-xs font-semibold text-fg uppercase tracking-wider mb-1">Git Remote &amp; Synchronization</h3>
+                  <p className="text-xs text-dim">Configure background fetch polling and remote synchronization behavior</p>
+                </div>
+
+                {/* Auto Fetch Toggle */}
+                <div className="rounded-lg border border-edge/80 bg-panel2/40 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold text-fg block">Periodic Background Fetch</span>
+                      <span className="text-[11px] text-dim">
+                        Automatically run git fetch in the background to update incoming/outgoing commits and branch tracking
+                      </span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={autoFetch}
+                        onChange={(e) => setAutoFetch(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-panel3 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent"></div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Fetch Interval */}
+                {autoFetch && (
+                  <div className="rounded-lg border border-edge/80 bg-panel2/40 p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-semibold text-fg block">Auto-Fetch Interval</span>
+                        <span className="text-[11px] text-dim">How frequently StrataGit checks remotes for new changes</span>
+                      </div>
+                      <div className="flex items-center gap-1 bg-panel3 p-0.5 rounded-md">
+                        {[
+                          { label: '30s', val: 30 },
+                          { label: '1m', val: 60 },
+                          { label: '2m', val: 120 },
+                          { label: '5m', val: 300 },
+                          { label: '10m', val: 600 }
+                        ].map((item) => (
+                          <button
+                            key={item.val}
+                            onClick={() => setAutoFetchInterval(item.val)}
+                            className={`px-2.5 py-1 text-xs rounded transition-all ${
+                              autoFetchInterval === item.val
+                                ? 'bg-accent text-white font-medium'
+                                : 'text-dim hover:text-fg'
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Window Focus Sync Information */}
+                <div className="rounded-lg border border-edge/60 bg-panel2/20 p-3.5 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-medium text-fg">
+                    <Check size={14} className="text-accent" />
+                    <span>Focus-Triggered Sync Active</span>
+                  </div>
+                  <p className="text-[11px] text-dim pl-5 leading-relaxed">
+                    Whenever you switch back to StrataGit from your code editor or browser, a silent fetch runs automatically to ensure your commit graph and ahead/behind badges match remote state.
+                  </p>
                 </div>
               </div>
             )}

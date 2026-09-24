@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Copy,
   Layers,
+  Tag as TagIcon,
   X
 } from 'lucide-react';
 import { FileChange, FileStatusKind } from '../../../shared/types';
@@ -365,6 +366,7 @@ export function CommitDetailPanel() {
   const runAndRefresh = useApp((s) => s.runAndRefresh);
   const openRebaseModal = useApp((s) => s.openRebaseModal);
   const cherryPickCommit = useApp((s) => s.cherryPickCommit);
+  const openCreateTagModal = useApp((s) => s.openCreateTagModal);
   const isWip = selectedCommit === WIP_HASH;
   const [panelWidth, setPanelWidth] = useState(360);
 
@@ -490,6 +492,14 @@ export function CommitDetailPanel() {
                     onClick={() => {
                       close();
                       openRebaseModal(detail.hash);
+                    }}
+                  />
+                  <MenuItem
+                    icon={<TagIcon size={13} />}
+                    label="Create tag at this commit"
+                    onClick={() => {
+                      close();
+                      openCreateTagModal(detail.hash);
                     }}
                   />
                 </>

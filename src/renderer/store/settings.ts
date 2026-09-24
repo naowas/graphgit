@@ -290,6 +290,8 @@ export interface SettingsState {
   codeFontFamily: string;
   customCodeFont: string;
   graphRowHeight: number;
+  autoFetch: boolean;
+  autoFetchInterval: number; // in seconds
 
   openSettings: () => void;
   closeSettings: () => void;
@@ -301,6 +303,8 @@ export interface SettingsState {
   setCodeFontFamily: (font: string) => void;
   setCustomCodeFont: (font: string) => void;
   setGraphRowHeight: (height: number) => void;
+  setAutoFetch: (enabled: boolean) => void;
+  setAutoFetchInterval: (seconds: number) => void;
   resetDefaults: () => void;
 }
 
@@ -315,7 +319,9 @@ const DEFAULT_SETTINGS = {
   customUiFont: '',
   codeFontFamily: 'JetBrains Mono',
   customCodeFont: '',
-  graphRowHeight: 26
+  graphRowHeight: 26,
+  autoFetch: true,
+  autoFetchInterval: 60
 };
 
 function loadStoredSettings() {
@@ -455,6 +461,16 @@ export const useSettings = create<SettingsState>((set, get) => ({
   setGraphRowHeight: (graphRowHeight: number) => {
     set({ graphRowHeight });
     saveSettings({ graphRowHeight });
+  },
+
+  setAutoFetch: (autoFetch: boolean) => {
+    set({ autoFetch });
+    saveSettings({ autoFetch });
+  },
+
+  setAutoFetchInterval: (autoFetchInterval: number) => {
+    set({ autoFetchInterval });
+    saveSettings({ autoFetchInterval });
   },
 
   resetDefaults: () => {

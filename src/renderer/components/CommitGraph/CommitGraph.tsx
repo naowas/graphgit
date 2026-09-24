@@ -406,6 +406,7 @@ export function CommitGraph() {
   const isLoadingMoreCommits = useApp((s) => s.isLoadingMoreCommits);
   const openRebaseModal = useApp((s) => s.openRebaseModal);
   const cherryPickCommit = useApp((s) => s.cherryPickCommit);
+  const openCreateTagModal = useApp((s) => s.openCreateTagModal);
 
   const openDiff = useApp((s) => s.openDiff);
   const diffMaximized = useApp((s) => s.diffMaximized);
@@ -454,6 +455,27 @@ export function CommitGraph() {
   const commits = useMemo(() => {
     if (!allCommits) return NO_COMMITS;
     if (!q) return allCommits;
+
+    // Advanced search syntax support
+    if (q.startsWith('author:') || q.startsWith('from:')) {
+      const author = q.replace(/^(author|from):/, '').trim();
+      return allCommits.filter(
+        (c) => c.authorName.toLowerCase().includes(author) || c.authorEmail.toLowerCase().includes(author)
+      );
+    }
+    if (q.startsWith('hash:')) {
+      const h = q.replace(/^hash:/, '').trim();
+      return allCommits.filter((c) => c.hash.toLowerCase().startsWith(h));
+    }
+    if (q.startsWith('tag:')) {
+      const t = q.replace(/^tag:/, '').trim();
+      return allCommits.filter((c) => c.refs.some((r) => r.kind === 'tag' && r.label.toLowerCase().includes(t)));
+    }
+    if (q.startsWith('branch:')) {
+      const b = q.replace(/^branch:/, '').trim();
+      return allCommits.filter((c) => c.refs.some((r) => r.kind === 'branch' && r.label.toLowerCase().includes(b)));
+    }
+
     return allCommits.filter(
       (c) =>
         c.message.toLowerCase().includes(q) ||
@@ -488,7 +510,37 @@ export function CommitGraph() {
 
   const refMenuItems = (ref: CommitRef): ContextMenuItem[] => {
     const name = ref.label;
-    const isLocal = !ref.isRemote && ref.kind !== 'tag';
+    if (ref.kind === 'tag') {
+      return [
+        {
+          label: `Push tag "${name}" to origin`,
+          icon: <ArrowUpFromLine size={13} />,
+          onClick: () => void runAndRefresh(() => api.pushTag(name, 'origin'), `Pushed tag ${name}`)
+        },
+        {
+          label: `Delete tag "${name}" (Local)`,
+          icon: <Trash2 size={13} />,
+          danger: true,
+          onClick: () => void runAndRefresh(() => api.deleteTag(name, false), `Deleted tag ${name}`)
+        },
+        {
+          label: `Delete tag "${name}" on origin`,
+          icon: <Trash2 size={13} />,
+          danger: true,
+          onClick: () => void runAndRefresh(() => api.deleteTag(name, true, 'origin'), `Deleted remote tag ${name}`)
+        },
+        { label: '', divider: true },
+        {
+          label: 'Copy Tag Name',
+          icon: <Tag size={13} />,
+          onClick: () => {
+            void navigator.clipboard.writeText(name);
+            notify('info', `Copied tag "${name}" to clipboard`);
+          }
+        }
+      ];
+    }
+    const isLocal = !ref.isRemote;
     const remoteName = ref.isRemote ? name.split('/')[0] : 'origin';
     const remoteShort = ref.isRemote ? name.split('/').slice(1).join('/') : name;
     return [
@@ -588,6 +640,11 @@ export function CommitGraph() {
         submitLabel: 'Create branch',
         onSubmit: (name) => void runAndRefresh(() => api.createBranch(name, commit.hash), `Branch '${name}' created`)
       }
+    },
+    {
+      label: 'Create tag here…',
+      icon: <Tag size={13} />,
+      onClick: () => openCreateTagModal(commit.hash)
     },
     {
       label: 'Cherry-Pick onto current branch',

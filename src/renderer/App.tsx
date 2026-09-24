@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from './store';
 import { useSettings } from './store/settings';
+import { api } from './lib/api';
 import { TabBar } from './components/TabBar/TabBar';
 import { Toolbar } from './components/Toolbar/Toolbar';
 import { Sidebar } from './components/Sidebar/Sidebar';
@@ -14,6 +15,11 @@ import { AppLoadingScreen } from './components/Loading/AppLoadingScreen';
 import { ConflictBanner } from './components/ConflictResolver/ConflictBanner';
 import { ConflictResolverModal } from './components/ConflictResolver/ConflictResolverModal';
 import { InteractiveRebaseModal } from './components/Rebase/InteractiveRebaseModal';
+import { CreateTagModal } from './components/Sidebar/CreateTagModal';
+import { AddRemoteModal } from './components/Sidebar/AddRemoteModal';
+import { CommandPalette } from './components/CommandPalette/CommandPalette';
+import { TerminalDrawer } from './components/TerminalDrawer/TerminalDrawer';
+import { ShortcutsModal } from './components/Help/ShortcutsModal';
 
 function Toast() {
   const toast = useApp((s) => s.toast);
@@ -32,6 +38,9 @@ export function App() {
   const init = useApp((s) => s.init);
   const [isReady, setIsReady] = useState(false);
 
+  const autoFetch = useSettings((s) => s.autoFetch);
+  const autoFetchInterval = useSettings((s) => s.autoFetchInterval);
+
   useEffect(() => {
     const startTime = Date.now();
     void init().finally(() => {
@@ -44,14 +53,90 @@ export function App() {
     });
   }, [init]);
 
-  // Global keyboard shortcut for settings: Ctrl+, or Cmd+,
+  // Periodic and on-focus background git fetch to keep repository and ahead/behind status updated
+  useEffect(() => {
+    if (!activeTab || !autoFetch) return;
+
+    let inFlight = false;
+    const runSilentFetch = async () => {
+      if (inFlight) return;
+      const tab = useApp.getState().activeTab;
+      if (!tab) return;
+      inFlight = true;
+      try {
+        const res = await api.fetch();
+        if (res && res.ok) {
+          await useApp.getState().refresh();
+        }
+      } catch {
+        // Silently swallow network/remote errors in background so offline work isn't interrupted
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    // Initial silent check 2.5s after repo is loaded
+    const initialTimer = setTimeout(() => {
+      void runSilentFetch();
+    }, 2500);
+
+    // Periodic timer
+    const intervalMs = Math.max(10, autoFetchInterval || 60) * 1000;
+    const intervalTimer = setInterval(() => {
+      void runSilentFetch();
+    }, intervalMs);
+
+    // Sync when returning to the window/tab
+    const handleFocus = () => {
+      if (document.visibilityState !== 'hidden') {
+        void runSilentFetch();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(intervalTimer);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [activeTab, autoFetch, autoFetchInterval]);
+
+  // Global keyboard shortcuts:
+  // - Ctrl+K / Cmd+K or Ctrl+P / Cmd+P: Command Palette
+  // - Ctrl+` / Cmd+`: Terminal Drawer
+  // - Ctrl+, / Cmd+,: Settings
+  // - Escape: Close command palette, modals, or open diff
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+      const isMod = e.ctrlKey || e.metaKey;
+      if (isMod && (e.key === 'k' || e.key === 'p')) {
+        e.preventDefault();
+        useApp.getState().toggleCommandPalette();
+      } else if (isMod && (e.key === '`' || e.key === '~')) {
+        e.preventDefault();
+        useApp.getState().toggleTerminalDrawer();
+      } else if (isMod && e.key === 'b') {
+        e.preventDefault();
+        useApp.getState().toggleSidebar();
+      } else if (isMod && e.key === 'f') {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder*="Filter commits"]') as HTMLInputElement;
+        searchInput?.focus();
+        searchInput?.select();
+      } else if (isMod && e.key === ',') {
         e.preventDefault();
         useSettings.getState().openSettings();
+      } else if (e.key === '?' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+        e.preventDefault();
+        useApp.getState().toggleShortcutsModal();
       } else if (e.key === 'Escape') {
-        if (useApp.getState().openDiff) {
+        if (useApp.getState().shortcutsModalOpen) {
+          useApp.setState({ shortcutsModalOpen: false });
+        } else if (useApp.getState().commandPaletteOpen) {
+          useApp.getState().closeCommandPalette();
+        } else if (useApp.getState().openDiff) {
           useApp.getState().closeDiff();
         }
       }
@@ -75,6 +160,7 @@ export function App() {
             </div>
             <CommitDetailPanel />
           </div>
+          <TerminalDrawer />
         </>
       ) : (
         <Launchpad />
@@ -83,6 +169,10 @@ export function App() {
       <Toast />
       <ConflictResolverModal />
       <InteractiveRebaseModal />
+      <CreateTagModal />
+      <AddRemoteModal />
+      <CommandPalette />
+      <ShortcutsModal />
       <SettingsModal />
       <AppLoadingScreen isReady={isReady} />
     </div>

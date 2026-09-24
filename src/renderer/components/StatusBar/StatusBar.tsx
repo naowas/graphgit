@@ -1,5 +1,5 @@
 import React from 'react';
-import { GitBranch, ArrowUp, ArrowDown, Archive, Check, ChevronDown, ZoomIn, ZoomOut } from 'lucide-react';
+import { GitBranch, ArrowUp, ArrowDown, Archive, Check, ChevronDown, ZoomIn, ZoomOut, Terminal, Search } from 'lucide-react';
 import { useApp } from '../../store';
 import { api } from '../../lib/api';
 import { Dropdown } from '../ui/Dropdown';
@@ -13,6 +13,10 @@ export function StatusBar() {
   const log = useApp((s) => s.log);
   const isLoadingMoreCommits = useApp((s) => s.isLoadingMoreCommits);
   const runAndRefresh = useApp((s) => s.runAndRefresh);
+  const terminalOpen = useApp((s) => s.terminalDrawerOpen);
+  const toggleTerminalDrawer = useApp((s) => s.toggleTerminalDrawer);
+  const openCommandPalette = useApp((s) => s.openCommandPalette);
+  const activeTab = useApp((s) => s.activeTab);
   const ahead = status?.ahead ?? 0;
   const behind = status?.behind ?? 0;
   const branch = status?.currentBranch ?? '—';
@@ -87,6 +91,31 @@ export function StatusBar() {
       )}
 
       <span className="flex-1" />
+
+      {activeTab && (
+        <button
+          onClick={() => toggleTerminalDrawer()}
+          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs select-none transition-colors ${
+            terminalOpen ? 'bg-panel3 text-purple-300 font-medium' : 'hover:bg-panel3 text-dim hover:text-fg'
+          }`}
+          title="Toggle Embedded Terminal (Ctrl+`)"
+        >
+          <Terminal size={11} className={terminalOpen ? 'text-purple-400' : ''} />
+          <span>Terminal</span>
+        </button>
+      )}
+
+      {activeTab && (
+        <button
+          onClick={() => openCommandPalette()}
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-panel3 text-xs text-dim hover:text-fg select-none transition-colors"
+          title="Command Palette (Ctrl+K)"
+        >
+          <Search size={11} />
+          <span>⌘K</span>
+        </button>
+      )}
+
       <span className="flex items-center gap-1.5 px-1.5 font-mono text-[11px] text-dim hover:text-fg transition-colors">
         <StrataLogo size={12} />
         <span>StrataGit v{VERSION}</span>

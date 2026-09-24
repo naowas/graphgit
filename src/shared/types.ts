@@ -66,6 +66,38 @@ export interface StashInfo {
   date: string;
 }
 
+export interface TagInfo {
+  name: string;
+  hash: string;
+  shortHash: string;
+  tagger?: string;
+  date?: string;
+  message?: string;
+}
+
+export interface RemoteInfo {
+  name: string;
+  fetchUrl: string;
+  pushUrl: string;
+}
+
+export interface SubmoduleInfo {
+  name: string;
+  path: string;
+  hash: string;
+  isInitialized: boolean;
+  isDirty: boolean;
+  isOutOfSync: boolean;
+}
+
+export interface WorktreeInfo {
+  path: string;
+  hash: string;
+  branch: string;
+  isBare?: boolean;
+  isLocked?: boolean;
+}
+
 export interface FileChange {
   path: string;
   status: FileStatusKind;
@@ -219,8 +251,9 @@ export interface StrataGitApi {
   commit(message: string): Promise<{ ok: boolean; error?: string }>;
   pull(): Promise<{ ok: boolean; error?: string }>;
   push(): Promise<{ ok: boolean; error?: string }>;
-  fetch(): Promise<{ ok: boolean; error?: string }>;
+  fetch(remote?: string): Promise<{ ok: boolean; error?: string }>;
   mergeBranch(name: string): Promise<{ ok: boolean; error?: string }>;
+  rebaseBranch(upstream: string): Promise<{ ok: boolean; error?: string }>;
   checkoutBranch(name: string): Promise<{ ok: boolean; error?: string }>;
   createBranch(name: string, atHash?: string): Promise<{ ok: boolean; error?: string }>;
   deleteBranch(name: string, opts?: { local?: boolean; remote?: boolean; remoteName?: string; force?: boolean }): Promise<{ ok: boolean; error?: string }>;
@@ -251,7 +284,22 @@ export interface StrataGitApi {
   cherryPick(hash: string): Promise<{ ok: boolean; hasConflicts?: boolean; error?: string }>;
   getCommitsForRebase(baseHash: string): Promise<RebaseStep[]>;
   executeInteractiveRebase(baseHash: string, steps: RebaseStep[]): Promise<{ ok: boolean; hasConflicts?: boolean; error?: string }>;
+  getTags(): Promise<TagInfo[]>;
+  createTag(name: string, commitHash?: string, message?: string): Promise<{ ok: boolean; error?: string }>;
+  deleteTag(name: string, deleteRemote?: boolean, remoteName?: string): Promise<{ ok: boolean; error?: string }>;
+  pushTag(name: string, remoteName?: string): Promise<{ ok: boolean; error?: string }>;
+  getRemotes(): Promise<RemoteInfo[]>;
+  addRemote(name: string, url: string): Promise<{ ok: boolean; error?: string }>;
+  renameRemote(oldName: string, newName: string): Promise<{ ok: boolean; error?: string }>;
+  setRemoteUrl(name: string, url: string): Promise<{ ok: boolean; error?: string }>;
+  removeRemote(name: string): Promise<{ ok: boolean; error?: string }>;
+  pruneRemote(name: string): Promise<{ ok: boolean; error?: string }>;
+  getSubmodules(): Promise<SubmoduleInfo[]>;
+  updateSubmodules(path?: string): Promise<{ ok: boolean; error?: string }>;
+  getWorktrees(): Promise<WorktreeInfo[]>;
+  removeWorktree(worktreePath: string, force?: boolean): Promise<{ ok: boolean; error?: string }>;
   openTerminal(): Promise<{ ok: boolean; error?: string }>;
+  runCommand(command: string): Promise<{ ok: boolean; stdout?: string; stderr?: string; exitCode?: number; error?: string }>;
   openInEditor(filePath: string): Promise<{ ok: boolean; error?: string }>;
   minimizeWindow(): Promise<boolean>;
   maximizeWindow(): Promise<boolean>;

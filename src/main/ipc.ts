@@ -2,7 +2,7 @@ import { app, ipcMain, dialog, shell, BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, exec } from 'node:child_process';
 import {
   StrataGitApi,
   GitStatus,
@@ -65,6 +65,22 @@ import {
   getCommitsForRebase,
   executeInteractiveRebase
 } from './git/conflicts-rebase';
+import {
+  getTags,
+  createTag,
+  deleteTag,
+  pushTag,
+  getRemotes,
+  addRemote,
+  renameRemote,
+  setRemoteUrl,
+  removeRemote,
+  pruneRemote,
+  getSubmodules,
+  updateSubmodules,
+  getWorktrees,
+  removeWorktree
+} from './git/objects-navigation';
 
 /** Recently opened repos persisted in the user config dir. */
 const recentFile = () => path.join(os.homedir(), '.config', 'stratagit', 'recent-repos.json');
@@ -182,15 +198,76 @@ export function registerIpc(getWin: () => BrowserWindow | null, getRepo: () => s
   });
 
   handle('git:pull', async () => {
-    await withGit(requireRepo(), (g) => g.pull());
+    await withGit(requireRepo(), async (g) => {
+      try {
+        await g.pull();
+      } catch (err: unknown) {
+        const msg = String(err);
+        if (msg.includes('no tracking information') || msg.includes('no upstream')) {
+          const status = await g.status();
+          const current = status.current;
+          if (current) {
+            await g.pull('origin', current);
+            return;
+          }
+        }
+        if (msg.includes('overwritten by merge') || msg.includes('local changes to the following files')) {
+          throw new Error('Your uncommitted local changes would be overwritten by pull. Please stash or commit them first.');
+        }
+        throw err;
+      }
+    });
     return { ok: true };
   });
+
   handle('git:push', async () => {
-    await withGit(requireRepo(), (g) => g.push());
+    await withGit(requireRepo(), async (g) => {
+      const remotes = await g.getRemotes();
+      if (!remotes || remotes.length === 0) {
+        throw new Error('No remote repository configured. Add a remote in the sidebar first.');
+      }
+      try {
+        await g.push();
+      } catch (err: unknown) {
+        const msg = String(err);
+        if (msg.includes('no upstream branch') || msg.includes('--set-upstream')) {
+          const status = await g.status();
+          const current = status.current;
+          if (current) {
+            const defaultRemote = remotes[0]?.name || 'origin';
+            await g.push(['--set-upstream', defaultRemote, current]);
+            return;
+          }
+        }
+        throw err;
+      }
+    });
     return { ok: true };
   });
-  handle('git:fetch', async () => {
-    await withGit(requireRepo(), (g) => g.fetch());
+  handle('git:fetch', async (remote?: string) => {
+    await withGit(requireRepo(), async (g) => {
+      try {
+        if (remote) {
+          await g.fetch(remote);
+        } else {
+          const remotes = await g.getRemotes();
+          if (!remotes || remotes.length === 0) {
+            return;
+          }
+          await g.fetch(['--all']);
+        }
+      } catch (err: unknown) {
+        const msg = String(err);
+        if (msg.includes('No remote repository specified') || msg.includes('no remotes')) {
+          return;
+        }
+        throw err;
+      }
+    });
+    return { ok: true };
+  });
+  handle('git:rebase-branch', async (upstream: string) => {
+    await withGit(requireRepo(), (g) => g.rebase([upstream]));
     return { ok: true };
   });
   handle('git:merge', async (branchName: string) => {
@@ -360,6 +437,76 @@ export function registerIpc(getWin: () => BrowserWindow | null, getRepo: () => s
     return executeInteractiveRebase(requireRepo(), baseHash, steps);
   });
 
+  // Tags
+  handle('git:get-tags', async () => {
+    return getTags(requireRepo());
+  });
+
+  handle('git:create-tag', async (name: string, commitHash?: string, message?: string) => {
+    await createTag(requireRepo(), name, commitHash, message);
+    return { ok: true };
+  });
+
+  handle('git:delete-tag', async (name: string, deleteRemote?: boolean, remoteName?: string) => {
+    await deleteTag(requireRepo(), name, deleteRemote, remoteName);
+    return { ok: true };
+  });
+
+  handle('git:push-tag', async (name: string, remoteName?: string) => {
+    await pushTag(requireRepo(), name, remoteName);
+    return { ok: true };
+  });
+
+  // Remotes
+  handle('git:get-remotes', async () => {
+    return getRemotes(requireRepo());
+  });
+
+  handle('git:add-remote', async (name: string, url: string) => {
+    await addRemote(requireRepo(), name, url);
+    return { ok: true };
+  });
+
+  handle('git:rename-remote', async (oldName: string, newName: string) => {
+    await renameRemote(requireRepo(), oldName, newName);
+    return { ok: true };
+  });
+
+  handle('git:set-remote-url', async (name: string, url: string) => {
+    await setRemoteUrl(requireRepo(), name, url);
+    return { ok: true };
+  });
+
+  handle('git:remove-remote', async (name: string) => {
+    await removeRemote(requireRepo(), name);
+    return { ok: true };
+  });
+
+  handle('git:prune-remote', async (name: string) => {
+    await pruneRemote(requireRepo(), name);
+    return { ok: true };
+  });
+
+  // Submodules
+  handle('git:get-submodules', async () => {
+    return getSubmodules(requireRepo());
+  });
+
+  handle('git:update-submodules', async (subPath?: string) => {
+    await updateSubmodules(requireRepo(), subPath);
+    return { ok: true };
+  });
+
+  // Worktrees
+  handle('git:get-worktrees', async () => {
+    return getWorktrees(requireRepo());
+  });
+
+  handle('git:remove-worktree', async (worktreePath: string, force?: boolean) => {
+    await removeWorktree(requireRepo(), worktreePath, force);
+    return { ok: true };
+  });
+
   handle('app:open-terminal', async () => {
     const repo = requireRepo();
     const plat = process.platform;
@@ -386,6 +533,21 @@ export function registerIpc(getWin: () => BrowserWindow | null, getRepo: () => s
     } catch (err) {
       return { ok: false, error: errorMessage(err) };
     }
+  });
+
+  handle('app:run-command', async (command: string) => {
+    const repo = requireRepo();
+    return new Promise<{ ok: boolean; stdout?: string; stderr?: string; exitCode?: number; error?: string }>((resolve) => {
+      exec(command, { cwd: repo, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+        resolve({
+          ok: !error,
+          stdout: stdout ? stdout.toString() : '',
+          stderr: stderr ? stderr.toString() : '',
+          exitCode: error ? ((error as unknown as { code?: number }).code ?? 1) : 0,
+          error: error ? error.message : undefined
+        });
+      });
+    });
   });
 
   handle('app:open-in-editor', async (filePath: string) => {
