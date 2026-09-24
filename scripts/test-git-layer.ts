@@ -4,7 +4,7 @@ import { getCommitDetail, getFileDiff } from '../src/main/git/commit-detail';
 import { getStashes, getBranches, revertHunk } from '../src/main/git/branch-stash';
 
 async function main() {
-  const repo = '/tmp/graphgit-test';
+  const repo = '/tmp/stratagit-test';
   const status = await getStatus(repo);
   console.log('status:', JSON.stringify({ branch: status.currentBranch, staged: status.staged.map((f) => f.path), unstaged: status.unstaged.map((f) => f.path) }));
 

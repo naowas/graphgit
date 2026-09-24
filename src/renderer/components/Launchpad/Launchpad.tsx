@@ -3,6 +3,7 @@ import { FolderGit2, FolderOpen, Settings } from 'lucide-react';
 import { useApp } from '../../store';
 import { useSettings } from '../../store/settings';
 import { api } from '../../lib/api';
+import { StrataLogo } from '../Common/StrataLogo';
 
 export function Launchpad() {
   const recentRepos = useApp((s) => s.recentRepos);
@@ -11,11 +12,14 @@ export function Launchpad() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-base">
-      <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center">
-          <FolderGit2 size={26} className="text-accent" />
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex items-center gap-3">
+          <StrataLogo size={46} />
+          <h1 className="text-3xl font-bold tracking-tight text-fg">
+            Strata<span className="text-accent">Git</span>
+          </h1>
         </div>
-        <h1 className="text-2xl font-semibold text-fg">GraphGit</h1>
+        <p className="text-xs text-dim">Visual commit strata &amp; effortless Git workflow</p>
       </div>
       <div className="flex items-center gap-3">
         <button

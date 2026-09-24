@@ -19,6 +19,7 @@ import {
   UI_FONT_PRESETS,
   CODE_FONT_PRESETS
 } from '../../store/settings';
+import { StrataLogo } from '../Common/StrataLogo';
 
 export function SettingsModal() {
   const {
@@ -147,7 +148,7 @@ export function SettingsModal() {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-xs font-semibold text-fg uppercase tracking-wider mb-1">Color Theme</h3>
-                  <p className="text-xs text-dim">Select an aesthetic palette crafted for GraphGit</p>
+                  <p className="text-xs text-dim">Select an aesthetic palette crafted for StrataGit</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -426,18 +427,18 @@ export function SettingsModal() {
             {activeTab === 'about' && (
               <div className="space-y-5">
                 <div>
-                  <h3 className="text-xs font-semibold text-fg uppercase tracking-wider mb-1">About GraphGit</h3>
-                  <p className="text-xs text-dim">A GitKraken-inspired commit-graph-centric Git GUI client</p>
+                  <h3 className="text-xs font-semibold text-fg uppercase tracking-wider mb-1">About StrataGit</h3>
+                  <p className="text-xs text-dim">A modern commit-graph-centric Git client for Linux &amp; macOS</p>
                 </div>
 
                 <div className="rounded-lg border border-edge bg-panel2/50 p-4 space-y-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/20 font-mono font-bold text-base">
-                      GG
-                    </div>
+                    <StrataLogo size={42} />
                     <div>
-                      <div className="text-sm font-semibold text-fg">GraphGit v0.1.0</div>
-                      <div className="text-xs text-dim">Built with Electron, React, TypeScript & Vite</div>
+                      <div className="text-sm font-semibold text-fg">
+                        Strata<span className="text-accent">Git</span> v0.1.0
+                      </div>
+                      <div className="text-xs text-dim">Built with Electron, React, TypeScript &amp; Vite</div>
                     </div>
                   </div>
                 </div>

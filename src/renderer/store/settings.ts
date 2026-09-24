@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 export type ThemeId =
+  | 'stratagit-dark'
   | 'graphgit-dark'
   | 'github-dark'
   | 'dracula'
@@ -36,10 +37,32 @@ export interface ThemeDefinition {
 }
 
 export const THEMES: Record<ThemeId, ThemeDefinition> = {
+  'stratagit-dark': {
+    id: 'stratagit-dark',
+    name: 'StrataGit Dark',
+    description: 'Sleek onyx & electric cyan theme inspired by modern dev tools',
+    colors: {
+      base: '#14171d',
+      panel: '#1a1d24',
+      panel2: '#222630',
+      panel3: '#2a303d',
+      edge: '#2d3340',
+      fg: '#e2e8f0',
+      dim: '#94a3b8',
+      faint: '#64748b',
+      accent: '#38bdf8',
+      accentHover: '#0ea5e9',
+      add: '#34d399',
+      addBg: '#064e3b4d',
+      del: '#f87171',
+      delBg: '#7f1d1d4d',
+      warn: '#fbbf24'
+    }
+  },
   'graphgit-dark': {
     id: 'graphgit-dark',
-    name: 'GraphGit Dark',
-    description: 'Sleek onyx & electric cyan theme inspired by modern dev tools',
+    name: 'StrataGit Dark (Legacy)',
+    description: 'Legacy alias for StrataGit Dark',
     colors: {
       base: '#14171d',
       panel: '#1a1d24',
@@ -281,10 +304,11 @@ export interface SettingsState {
   resetDefaults: () => void;
 }
 
-const STORAGE_KEY = 'graphgit:settings:v1';
+const STORAGE_KEY = 'stratagit:settings:v1';
+const LEGACY_STORAGE_KEY = 'graphgit:settings:v1';
 
 const DEFAULT_SETTINGS = {
-  theme: 'graphgit-dark' as ThemeId,
+  theme: 'stratagit-dark' as ThemeId,
   uiFontSize: 13,
   codeFontSize: 12,
   uiFontFamily: 'Inter',
@@ -296,9 +320,12 @@ const DEFAULT_SETTINGS = {
 
 function loadStoredSettings() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw);
+    if (parsed.theme === 'graphgit-dark') {
+      parsed.theme = 'stratagit-dark';
+    }
     return { ...DEFAULT_SETTINGS, ...parsed };
   } catch {
     return DEFAULT_SETTINGS;
@@ -325,7 +352,7 @@ export function applySettingsToDOM(settings: {
   customCodeFont: string;
 }) {
   const root = document.documentElement;
-  const theme = THEMES[settings.theme] || THEMES['graphgit-dark'];
+  const theme = THEMES[settings.theme] || THEMES['stratagit-dark'];
 
   // Apply colors
   for (const [key, value] of Object.entries(theme.colors)) {

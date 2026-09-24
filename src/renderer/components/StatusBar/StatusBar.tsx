@@ -3,6 +3,7 @@ import { GitBranch, ArrowUp, ArrowDown, Archive, Check, ChevronDown, ZoomIn, Zoo
 import { useApp } from '../../store';
 import { api } from '../../lib/api';
 import { Dropdown } from '../ui/Dropdown';
+import { StrataLogo } from '../Common/StrataLogo';
 
 const VERSION = '1.0.0';
 
@@ -86,7 +87,10 @@ export function StatusBar() {
       )}
 
       <span className="flex-1" />
-      <span className="px-1.5">GraphGit v{VERSION}</span>
+      <span className="flex items-center gap-1.5 px-1.5 font-mono text-[11px] text-dim hover:text-fg transition-colors">
+        <StrataLogo size={12} />
+        <span>StrataGit v{VERSION}</span>
+      </span>
     </div>
   );
 }

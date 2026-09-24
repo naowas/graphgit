@@ -10,7 +10,7 @@ const execFileP = promisify(execFile);
 
 /** Write a temporary editor script git can run as $GIT_SEQUENCE_EDITOR. */
 function tmpScript(name: string, code: string): string {
-  const file = path.join(os.tmpdir(), `graphgit-${name}-${crypto.randomBytes(4).toString('hex')}.cjs`);
+  const file = path.join(os.tmpdir(), `stratagit-${name}-${crypto.randomBytes(4).toString('hex')}.cjs`);
   require('node:fs').writeFileSync(file, code);
   return file;
 }

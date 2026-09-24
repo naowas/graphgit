@@ -4,7 +4,6 @@ import {
   X,
   FolderGit2,
   Home,
-  GitBranch,
   Minus,
   Square,
   Copy,
@@ -13,6 +12,7 @@ import {
 import { useApp } from '../../store';
 import { useSettings } from '../../store/settings';
 import { api } from '../../lib/api';
+import { StrataLogo } from '../Common/StrataLogo';
 
 export function TabBar() {
   const { tabs, activeTab, setActiveTab, closeTab } = useApp();
@@ -43,11 +43,9 @@ export function TabBar() {
         className="flex items-center gap-2 pr-2.5 py-1 shrink-0 cursor-default"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <div className="w-5 h-5 rounded-[5px] bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-cyan-500/20">
-          <GitBranch size={13} className="text-white stroke-[2.5]" />
-        </div>
-        <span className="text-[11px] font-bold tracking-widest text-fg/90 uppercase font-mono">
-          GraphGit
+        <StrataLogo size={19} />
+        <span className="text-[12px] font-bold tracking-wider text-fg/90 font-mono">
+          Strata<span className="text-accent">Git</span>
         </span>
       </div>
 

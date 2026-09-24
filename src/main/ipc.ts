@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import {
-  GraphGitApi,
+  StrataGitApi,
   GitStatus,
   GraphResult,
   BranchInfo,
@@ -46,11 +46,22 @@ import {
 } from './git/history';
 
 /** Recently opened repos persisted in the user config dir. */
-const recentFile = () => path.join(os.homedir(), '.config', 'graphgit', 'recent-repos.json');
+const recentFile = () => path.join(os.homedir(), '.config', 'stratagit', 'recent-repos.json');
+const legacyRecentFile = () => path.join(os.homedir(), '.config', 'graphgit', 'recent-repos.json');
 
 function readRecent(): string[] {
   try {
-    return JSON.parse(fs.readFileSync(recentFile(), 'utf8'));
+    if (fs.existsSync(recentFile())) {
+      return JSON.parse(fs.readFileSync(recentFile(), 'utf8'));
+    }
+    if (fs.existsSync(legacyRecentFile())) {
+      const legacy = JSON.parse(fs.readFileSync(legacyRecentFile(), 'utf8'));
+      if (Array.isArray(legacy)) {
+        writeRecent(legacy);
+        return legacy;
+      }
+    }
+    return [];
   } catch {
     return [];
   }

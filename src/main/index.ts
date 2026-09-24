@@ -15,7 +15,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 640,
     backgroundColor: '#181a1f',
-    title: 'GraphGit',
+    title: 'StrataGit',
     frame: false,
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     autoHideMenuBar: true,

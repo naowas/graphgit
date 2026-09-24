@@ -1,10 +1,10 @@
 {
-  "name": "graph-git",
-  "productName": "GraphGit",
+  "name": "stratagit",
+  "productName": "StrataGit",
   "version": "0.1.0",
-  "description": "A GitKraken-inspired commit-graph-centric Git GUI client for Linux and macOS",
+  "description": "A commit-graph-centric visual Git client for Linux and macOS",
   "main": "out/main/index.js",
-  "author": "GraphGit",
+  "author": "StrataGit",
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -42,8 +42,8 @@
     "vite": "^5.4.11"
   },
   "build": {
-    "appId": "dev.graphgit.app",
-    "productName": "GraphGit",
+    "appId": "dev.stratagit.app",
+    "productName": "StrataGit",
     "directories": {
       "output": "dist"
     },

@@ -134,7 +134,7 @@ export interface DiffRange {
 }
 
 // IPC API exposed via contextBridge
-export interface GraphGitApi {
+export interface StrataGitApi {
   openRepo(path: string): Promise<{ ok: boolean; repo?: RepoSummary; error?: string }>;
   recentRepos(): Promise<string[]>;
   removeRecentRepo(path: string): Promise<void>;
@@ -185,3 +185,4 @@ export interface GraphGitApi {
 }
 
 export type ApiEvent = 'repo-updated';
+export type GraphGitApi = StrataGitApi;

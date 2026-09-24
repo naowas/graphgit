@@ -1,7 +1,7 @@
 import type { Api } from '../../preload/index';
-import type { GraphGitApi } from '../../shared/types';
+import type { StrataGitApi } from '../../shared/types';
 
-export const api = (window as unknown as { api: Api & GraphGitApi }).api;
+export const api = (window as unknown as { api: Api & StrataGitApi }).api;
 
 /** Unwrap the {__error} envelope produced by main-process handlers. */
 export async function unwrap<T>(p: Promise<T>): Promise<T> {

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { GitBranch, GitCommit, Sparkles } from 'lucide-react';
+import { StrataLogo } from '../Common/StrataLogo';
 
 export function AppLoadingScreen({ isReady }: { isReady: boolean }) {
   const [visible, setVisible] = useState(true);
-  const [statusText, setStatusText] = useState('Initializing GraphGit…');
+  const [statusText, setStatusText] = useState('Initializing StrataGit…');
   const [progress, setProgress] = useState(15);
 
   useEffect(() => {
@@ -49,26 +49,11 @@ export function AppLoadingScreen({ isReady }: { isReady: boolean }) {
       </div>
 
       <div className="relative z-10 flex flex-col items-center max-w-sm px-6 text-center">
-        {/* Animated Brand Graph Icon Container */}
+        {/* Animated Brand Strata Logo Container */}
         <div className="relative mb-6">
-          {/* Glowing pulse ring */}
-          <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 blur-lg opacity-60 animate-pulse" />
-
-          {/* Central Logo Box */}
-          <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 p-[1.5px] shadow-2xl shadow-cyan-500/30">
-            <div className="w-full h-full rounded-[15px] bg-[#12141a] flex items-center justify-center">
-              <GitBranch size={30} className="text-cyan-400 stroke-[2.2] animate-bounce" />
-            </div>
-          </div>
-
-          {/* Floating animated Git graph nodes */}
-          <div className="absolute -top-3 -right-3 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-400/80 flex items-center justify-center animate-ping" />
-          <div className="absolute -top-3 -right-3 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shadow-md shadow-emerald-500/40">
-            <GitCommit size={11} className="text-white" />
-          </div>
-
-          <div className="absolute -bottom-2 -left-2 w-4 h-4 rounded-full bg-cyan-400 flex items-center justify-center shadow-md shadow-cyan-400/40">
-            <div className="w-1.5 h-1.5 rounded-full bg-white" />
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-cyan-500 to-indigo-600 blur-xl opacity-60 animate-pulse" />
+          <div className="relative">
+            <StrataLogo size={76} animated />
           </div>
         </div>
 
@@ -97,10 +82,10 @@ export function AppLoadingScreen({ isReady }: { isReady: boolean }) {
         </div>
 
         {/* Brand Name */}
-        <h1 className="text-xl font-bold tracking-wider text-fg uppercase font-mono mb-1 flex items-center gap-1.5">
-          Graph<span className="text-accent">Git</span>
+        <h1 className="text-2xl font-bold tracking-wider text-fg uppercase font-mono mb-1 flex items-center gap-1.5">
+          Strata<span className="text-accent">Git</span>
         </h1>
-        <p className="text-xs text-dim mb-6">Visual commit graphs & effortless Git workflow</p>
+        <p className="text-xs text-dim mb-6">Visual commit strata &amp; effortless Git workflow</p>
 
         {/* Progress Bar */}
         <div className="w-64 h-1.5 bg-panel3 rounded-full overflow-hidden mb-3 relative border border-edge/60">
