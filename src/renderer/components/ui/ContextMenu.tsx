@@ -28,8 +28,6 @@ export function ContextMenu({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [promptValue, setPromptValue] = useState('');
-  const [promptOpen, setPromptOpen] = useState(false);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -62,33 +60,11 @@ export function ContextMenu({
         if (item.divider) return <div key={i} className="my-1 border-t border-edge" />;
         if (item.prompt) {
           return (
-            <div key={i} className="px-2 py-1.5 flex flex-col gap-1.5">
-              <input
-                autoFocus
-                value={promptValue}
-                onChange={(e) => setPromptValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && promptValue.trim()) {
-                    item.prompt!.onSubmit(promptValue.trim());
-                    onClose();
-                  }
-                }}
-                placeholder={item.prompt.placeholder}
-                className="w-full text-xs px-2 py-1 bg-base border border-edge rounded"
-              />
-              <button
-                className="rounded bg-accent hover:bg-accent-hover text-white px-2 py-1 font-medium disabled:opacity-40"
-                disabled={!promptValue.trim()}
-                onClick={() => {
-                  if (promptValue.trim()) {
-                    item.prompt!.onSubmit(promptValue.trim());
-                    onClose();
-                  }
-                }}
-              >
-                {item.prompt.submitLabel}
-              </button>
-            </div>
+            <ContextMenuPrompt
+              key={i}
+              prompt={item.prompt}
+              onClose={onClose}
+            />
           );
         }
         return (
@@ -108,6 +84,46 @@ export function ContextMenu({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function ContextMenuPrompt({
+  prompt,
+  onClose
+}: {
+  prompt: NonNullable<ContextMenuItem['prompt']>;
+  onClose: () => void;
+}) {
+  const [val, setVal] = useState(prompt.initial ?? '');
+
+  return (
+    <div className="px-2 py-1.5 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+      <input
+        autoFocus
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && val.trim()) {
+            prompt.onSubmit(val.trim());
+            onClose();
+          }
+        }}
+        placeholder={prompt.placeholder}
+        className="w-full text-xs px-2 py-1 bg-base border border-edge rounded"
+      />
+      <button
+        className="rounded bg-accent hover:bg-accent-hover text-white px-2 py-1 font-medium disabled:opacity-40"
+        disabled={!val.trim()}
+        onClick={() => {
+          if (val.trim()) {
+            prompt.onSubmit(val.trim());
+            onClose();
+          }
+        }}
+      >
+        {prompt.submitLabel}
+      </button>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import React from 'react';
-import { FolderGit2, FolderOpen } from 'lucide-react';
+import { FolderGit2, FolderOpen, Settings } from 'lucide-react';
 import { useApp } from '../../store';
+import { useSettings } from '../../store/settings';
 import { api } from '../../lib/api';
 
 export function Launchpad() {
@@ -16,13 +17,20 @@ export function Launchpad() {
         </div>
         <h1 className="text-2xl font-semibold text-fg">GraphGit</h1>
       </div>
-      <p className="text-dim text-sm -mt-3">A visual way to work with your git repositories</p>
-      <button
-        className="flex items-center gap-2 rounded-md bg-accent hover:bg-accent-hover text-white px-4 py-2 text-sm font-medium"
-        onClick={() => void openRepoDialog()}
-      >
-        <FolderOpen size={15} /> Open a Repository
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          className="flex items-center gap-2 rounded-md bg-accent hover:bg-accent-hover text-white px-4 py-2 text-sm font-medium transition-colors shadow-sm"
+          onClick={() => void openRepoDialog()}
+        >
+          <FolderOpen size={15} /> Open a Repository
+        </button>
+        <button
+          className="btn border border-edge bg-panel2 px-4 py-2 text-sm font-medium text-dim hover:text-fg hover:bg-panel3"
+          onClick={() => useSettings.getState().openSettings()}
+        >
+          <Settings size={15} /> Settings
+        </button>
+      </div>
       {recentRepos.length > 0 && (
         <div className="w-full max-w-md">
           <div className="text-xs text-faint uppercase tracking-wide mb-2 px-1">Recently opened</div>

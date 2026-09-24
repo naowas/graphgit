@@ -11,38 +11,55 @@ import { withGit, errorMessage } from './core';
 export async function getStatus(repoPath: string): Promise<GitStatus> {
   const git = await withGit(repoPath, (g) => Promise.resolve(g));
   const s = await git.status();
-  const mapFile = (p: string, staged: boolean, unstaged: boolean): GitFileStatus => {
-    let path = p;
-    let status: FileStatusKind = 'modified';
-    let renamedFrom: string | undefined;
-    if (path.includes(' -> ')) {
-      const [from, to] = path.split(' -> ');
-      renamedFrom = from;
-      path = to;
-      status = 'renamed';
-    }
-    return { path, status, staged, unstaged, renamedFrom };
-  };
 
   const staged: GitFileStatus[] = [];
   const unstaged: GitFileStatus[] = [];
-  const seen = new Set<string>();
-  const push = (arr: GitFileStatus[], f: string) => {
-    const item = mapFile(f, arr === staged, arr !== staged);
-    arr.push(item);
-    seen.add(item.path);
-  };
 
-  for (const f of s.staged) push(staged, f);
-  for (const f of s.modified) if (!seen.has(f) && !s.staged.includes(f)) push(unstaged, f);
-  for (const f of s.not_added) if (!seen.has(f)) push(unstaged, f);
-  for (const f of s.deleted) if (!seen.has(f) && !s.staged.includes(f)) push(unstaged, f);
-  for (const f of s.conflicted) {
-    if (!seen.has(f)) {
-      unstaged.push({ path: f, status: 'conflicted', staged: false, unstaged: true });
-      seen.add(f);
+  for (const file of s.files) {
+    let cleanPath = file.path;
+    let renamedFrom: string | undefined;
+    if (cleanPath.includes(' -> ')) {
+      const [from, to] = cleanPath.split(' -> ');
+      renamedFrom = from;
+      cleanPath = to;
+    }
+
+    // Index status (staged changes)
+    if (file.index && file.index !== ' ' && file.index !== '?') {
+      let status: FileStatusKind = 'modified';
+      if (file.index === 'A') status = 'added';
+      else if (file.index === 'D') status = 'deleted';
+      else if (file.index === 'R') status = 'renamed';
+      else if (file.index === 'U') status = 'conflicted';
+
+      staged.push({
+        path: cleanPath,
+        status,
+        staged: true,
+        unstaged: false,
+        renamedFrom
+      });
+    }
+
+    // Working tree status (unstaged changes)
+    if (file.working_dir && file.working_dir !== ' ') {
+      let status: FileStatusKind = 'modified';
+      if (file.working_dir === '?') status = 'untracked';
+      else if (file.working_dir === 'A') status = 'added';
+      else if (file.working_dir === 'D') status = 'deleted';
+      else if (file.working_dir === 'R') status = 'renamed';
+      else if (file.working_dir === 'U') status = 'conflicted';
+
+      unstaged.push({
+        path: cleanPath,
+        status,
+        staged: false,
+        unstaged: true,
+        renamedFrom
+      });
     }
   }
+
   return {
     currentBranch: s.current || 'HEAD (detached)',
     ahead: s.ahead,
@@ -55,6 +72,15 @@ export async function getStatus(repoPath: string): Promise<GitStatus> {
 const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/;
 
 export function parseUnifiedDiff(diffText: string, filePath: string): FileDiff {
+  if (!diffText || !diffText.trim()) {
+    return { path: filePath, hunks: [], insertions: 0, deletions: 0 };
+  }
+
+  const isBinary = /Binary files .* differ/i.test(diffText) || /GIT binary patch/i.test(diffText);
+  if (isBinary) {
+    return { path: filePath, hunks: [], insertions: 0, deletions: 0, isBinary: true };
+  }
+
   const hunks: DiffHunk[] = [];
   let cur: DiffHunk | null = null;
   let oldNo = 0;
@@ -62,7 +88,12 @@ export function parseUnifiedDiff(diffText: string, filePath: string): FileDiff {
   let insertions = 0;
   let deletions = 0;
 
-  for (const line of diffText.split('\n')) {
+  const rawLines = diffText.split('\n');
+  if (rawLines.length > 0 && rawLines[rawLines.length - 1] === '') {
+    rawLines.pop();
+  }
+
+  for (const line of rawLines) {
     const m = line.match(HUNK_RE);
     if (m) {
       cur = {

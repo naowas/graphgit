@@ -1,7 +1,61 @@
+import path from 'node:path';
+import fs from 'node:fs';
 import { CommitDetail, FileChange, FileDiff } from '../../shared/types';
 import { withGit, errorMessage } from './core';
 import { parseUnifiedDiff } from './status-diff';
 import { gravatarHash } from './history';
+
+/** Construct synthetic full-addition diff for untracked/new text files on disk. */
+async function getUntrackedFileDiff(repoPath: string, filePath: string): Promise<FileDiff | null> {
+  const fullPath = path.resolve(repoPath, filePath);
+  try {
+    const stat = await fs.promises.stat(fullPath);
+    if (!stat.isFile()) return null;
+    const buf = await fs.promises.readFile(fullPath);
+
+    // Detect binary files (null bytes in first 8000 bytes)
+    const checkLen = Math.min(buf.length, 8000);
+    for (let i = 0; i < checkLen; i++) {
+      if (buf[i] === 0) {
+        return { path: filePath, hunks: [], insertions: 0, deletions: 0, isBinary: true };
+      }
+    }
+
+    if (buf.length === 0) {
+      return { path: filePath, hunks: [], insertions: 0, deletions: 0 };
+    }
+
+    const text = buf.toString('utf8');
+    const rawLines = text.split(/\r?\n/);
+    if (rawLines.length > 1 && rawLines[rawLines.length - 1] === '') {
+      rawLines.pop();
+    }
+    const lines = rawLines.map((content, idx) => ({
+      kind: 'add' as const,
+      oldNo: null,
+      newNo: idx + 1,
+      content
+    }));
+
+    return {
+      path: filePath,
+      hunks: [
+        {
+          header: `@@ -0,0 +1,${lines.length} @@`,
+          oldStart: 0,
+          oldLines: 0,
+          newStart: 1,
+          newLines: lines.length,
+          lines
+        }
+      ],
+      insertions: lines.length,
+      deletions: 0
+    };
+  } catch {
+    return null;
+  }
+}
 
 /** Number stats per changed file for a commit. */
 export async function getCommitDetail(repoPath: string, hash: string): Promise<CommitDetail | null> {
@@ -91,11 +145,19 @@ export async function getFileDiff(
 ): Promise<FileDiff | null> {
   try {
     return await withGit(repoPath, async (git) => {
-      let diffText: string;
+      let diffText = '';
       if (opts?.staged) {
         diffText = await git.diff(['--cached', '--', filePath]);
       } else if (opts?.worktree) {
         diffText = await git.diff(['--', filePath]);
+        // Untracked or new files return empty from standard git diff
+        if (!diffText || diffText.trim() === '') {
+          try {
+            diffText = await git.raw(['diff', '--no-index', '--', '/dev/null', filePath]);
+          } catch {
+            // git diff --no-index can fail on certain special paths or OS quirks
+          }
+        }
       } else {
         const parents = (await git.raw(['rev-list', '--parents', '-n', '1', hash])).trim().split(' ').slice(1);
         if (parents.length === 0) {
@@ -105,7 +167,15 @@ export async function getFileDiff(
           diffText = await git.diff([`${parents[0]}..${hash}`, '--', filePath]);
         }
       }
-      return parseUnifiedDiff(diffText, filePath);
+
+      const parsed = parseUnifiedDiff(diffText, filePath);
+      // If worktree diff yielded no hunks and is not binary, check direct disk content (e.g. untracked files)
+      if (opts?.worktree && parsed.hunks.length === 0 && !parsed.isBinary) {
+        const fallback = await getUntrackedFileDiff(repoPath, filePath);
+        if (fallback) return fallback;
+      }
+
+      return parsed;
     });
   } catch (err) {
     console.error('getFileDiff failed:', errorMessage(err));

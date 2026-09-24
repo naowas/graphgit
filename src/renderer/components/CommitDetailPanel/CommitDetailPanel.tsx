@@ -26,15 +26,15 @@ import { api } from '../../lib/api';
 export function StatusIcon({ status }: { status: FileStatusKind }) {
   const map: Record<FileStatusKind, { icon: React.ReactNode; color: string; title: string }> = {
     modified: { icon: <Pencil size={11} />, color: 'text-warn', title: 'Modified' },
-    added: { icon: <Plus size={12} />, color: 'text-add', title: 'Added' },
-    deleted: { icon: <Minus size={12} />, color: 'text-del', title: 'Deleted' },
+    added: { icon: <Plus size={12} className="stroke-[2.5]" />, color: 'text-add', title: 'Added' },
+    deleted: { icon: <Minus size={12} className="stroke-[2.5]" />, color: 'text-del', title: 'Deleted' },
     renamed: { icon: <ArrowRight size={11} />, color: 'text-accent', title: 'Renamed' },
-    untracked: { icon: <Plus size={12} />, color: 'text-dim', title: 'Untracked' },
+    untracked: { icon: <Plus size={12} className="stroke-[2.5]" />, color: 'text-add', title: 'Untracked / New file' },
     conflicted: { icon: <Pencil size={11} />, color: 'text-del', title: 'Conflicted' }
   };
   const { icon, color, title } = map[status] || map.modified;
   return (
-    <span className={`${color} shrink-0`} title={title}>
+    <span className={`${color} shrink-0 flex items-center justify-center w-3.5 h-3.5`} title={title}>
       {icon}
     </span>
   );
@@ -55,10 +55,26 @@ function formatDate(iso: string): string {
 
 /** Working-copy commit form: stage/unstage/discard + commit message box. */
 function WorkdirPanel() {
-
   const status = useApp((s) => s.status);
+  const openDiff = useApp((s) => s.openDiff);
   const runAndRefresh = useApp((s) => s.runAndRefresh);
   const [msg, setMsg] = useState('');
+
+  const stagedCounts = useMemo(() => {
+    if (!status) return { modified: 0, added: 0, deleted: 0 };
+    const modified = status.staged.filter((f) => f.status === 'modified' || f.status === 'renamed').length;
+    const added = status.staged.filter((f) => f.status === 'added' || f.status === 'untracked').length;
+    const deleted = status.staged.filter((f) => f.status === 'deleted').length;
+    return { modified, added, deleted };
+  }, [status]);
+
+  const unstagedCounts = useMemo(() => {
+    if (!status) return { modified: 0, added: 0, deleted: 0 };
+    const modified = status.unstaged.filter((f) => f.status === 'modified' || f.status === 'renamed').length;
+    const added = status.unstaged.filter((f) => f.status === 'added' || f.status === 'untracked').length;
+    const deleted = status.unstaged.filter((f) => f.status === 'deleted').length;
+    return { modified, added, deleted };
+  }, [status]);
 
   const doCommit = async () => {
     if (!msg.trim()) return;
@@ -70,63 +86,145 @@ function WorkdirPanel() {
     <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
       {status && status.staged.length > 0 && (
         <>
-          <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-dim bg-panel2/40">
-            <span className="flex-1">STAGED FILES ({status.staged.length})</span>
-            <button className="hover:text-fg" title="Unstage all" onClick={() => void runAndRefresh(() => api.unstageAll())}>
+          <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-dim bg-panel2/40 border-b border-edge/30">
+            <span className="font-semibold text-fg/80">STAGED FILES ({status.staged.length})</span>
+            <div className="flex items-center gap-2 ml-1 text-xs font-mono">
+              {stagedCounts.modified > 0 && (
+                <span className="flex items-center gap-0.5 text-warn text-[11px]" title={`${stagedCounts.modified} modified`}>
+                  <Pencil size={10} className="text-warn shrink-0" />
+                  <span>{stagedCounts.modified}</span>
+                </span>
+              )}
+              {stagedCounts.added > 0 && (
+                <span className="flex items-center gap-0.5 text-add text-[11px]" title={`${stagedCounts.added} new`}>
+                  <Plus size={11} className="text-add shrink-0 stroke-[2.5]" />
+                  <span>{stagedCounts.added}</span>
+                </span>
+              )}
+              {stagedCounts.deleted > 0 && (
+                <span className="flex items-center gap-0.5 text-del text-[11px]" title={`${stagedCounts.deleted} deleted`}>
+                  <Minus size={11} className="text-del shrink-0 stroke-[2.5]" />
+                  <span>{stagedCounts.deleted}</span>
+                </span>
+              )}
+            </div>
+            <span className="flex-1" />
+            <button className="hover:text-fg hover:bg-panel3 p-1 rounded" title="Unstage all" onClick={() => void runAndRefresh(() => api.unstageAll())}>
               <Undo2 size={12} />
             </button>
           </div>
-          {status.staged.map((f) => (
-            <div key={f.path} className="group flex items-center gap-2 px-3 py-1 text-sm hover:bg-panel2">
-              <StatusIcon status={f.status} />
-              <span className="truncate font-mono text-xs flex-1">{f.path}</span>
-              <button
-                className="hidden group-hover:block text-dim hover:text-fg"
-                title="Unstage"
-                onClick={() => void runAndRefresh(() => api.unstageFiles([f.path]))}
+          {status.staged.map((f) => {
+            const active = openDiff?.filePath === f.path && openDiff?.commitHash === null && openDiff?.staged === true;
+            return (
+              <div
+                key={f.path}
+                className={`group flex items-center gap-2 px-3 py-1 text-sm select-none ${
+                  active ? 'bg-accent/15' : 'hover:bg-panel2'
+                }`}
               >
-                <Undo2 size={11} />
-              </button>
-            </div>
-          ))}
+                <StatusIcon status={f.status} />
+                <span
+                  className={`truncate font-mono text-xs flex-1 cursor-pointer hover:underline ${
+                    f.status === 'untracked' || f.status === 'added'
+                      ? 'text-add hover:text-add'
+                      : f.status === 'deleted'
+                        ? 'text-del line-through hover:text-del'
+                        : 'text-fg/90 hover:text-accent'
+                  }`}
+                  title={f.path}
+                  onClick={() => void useApp.getState().openFileDiff({ commitHash: null, filePath: f.path, staged: true, status: f.status })}
+                >
+                  {f.path}
+                </span>
+                <button
+                  className="hidden group-hover:flex items-center justify-center w-5 h-5 rounded text-dim hover:text-fg hover:bg-panel3"
+                  title="Unstage"
+                  onClick={() => void runAndRefresh(() => api.unstageFiles([f.path]))}
+                >
+                  <Undo2 size={11} />
+                </button>
+              </div>
+            );
+          })}
         </>
       )}
 
       {status && status.unstaged.length > 0 && (
         <>
-          <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-dim bg-panel2/40">
-            <span className="flex-1">UNSTAGED FILES ({status.unstaged.length})</span>
-            <button className="hover:text-fg" title="Stage all" onClick={() => void runAndRefresh(() => api.stageAll())}>
+          <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-dim bg-panel2/40 border-b border-edge/30">
+            <span className="font-semibold text-fg/80">UNSTAGED FILES ({status.unstaged.length})</span>
+            <div className="flex items-center gap-2 ml-1 text-xs font-mono">
+              {unstagedCounts.modified > 0 && (
+                <span className="flex items-center gap-0.5 text-warn text-[11px]" title={`${unstagedCounts.modified} modified`}>
+                  <Pencil size={10} className="text-warn shrink-0" />
+                  <span>{unstagedCounts.modified}</span>
+                </span>
+              )}
+              {unstagedCounts.added > 0 && (
+                <span className="flex items-center gap-0.5 text-add text-[11px]" title={`${unstagedCounts.added} new/untracked`}>
+                  <Plus size={11} className="text-add shrink-0 stroke-[2.5]" />
+                  <span>{unstagedCounts.added}</span>
+                </span>
+              )}
+              {unstagedCounts.deleted > 0 && (
+                <span className="flex items-center gap-0.5 text-del text-[11px]" title={`${unstagedCounts.deleted} deleted`}>
+                  <Minus size={11} className="text-del shrink-0 stroke-[2.5]" />
+                  <span>{unstagedCounts.deleted}</span>
+                </span>
+              )}
+            </div>
+            <span className="flex-1" />
+            <button className="hover:text-fg hover:bg-panel3 p-1 rounded" title="Stage all" onClick={() => void runAndRefresh(() => api.stageAll())}>
               <Plus size={12} />
             </button>
           </div>
-          {status.unstaged.map((f) => (
-            <div key={f.path} className="group flex items-center gap-2 px-3 py-1 text-sm hover:bg-panel2">
-              <StatusIcon status={f.status} />
-              <span
-                className="truncate font-mono text-xs flex-1 cursor-pointer text-fg/90 hover:text-accent"
-                onClick={() => void useApp.getState().openFileDiff({ commitHash: null, filePath: f.path })}
+          {status.unstaged.map((f) => {
+            const active = openDiff?.filePath === f.path && openDiff?.commitHash === null && openDiff?.staged === false;
+            return (
+              <div
+                key={f.path}
+                className={`group flex items-center gap-2 px-3 py-1 text-sm select-none ${
+                  active ? 'bg-accent/15' : 'hover:bg-panel2'
+                }`}
               >
-                {f.path}
-              </span>
-              <button
-                className="hidden group-hover:block text-dim hover:text-fg"
-                title="Stage file"
-                onClick={() => void runAndRefresh(() => api.stageFiles([f.path]))}
-              >
-                <Plus size={11} />
-              </button>
-              {f.status !== 'untracked' && (
-                <button
-                  className="hidden group-hover:block text-dim hover:text-del"
-                  title="Discard changes"
-                  onClick={() => void runAndRefresh(() => api.discardFile(f.path), 'Changes discarded')}
+                <StatusIcon status={f.status} />
+                <span
+                  className={`truncate font-mono text-xs flex-1 cursor-pointer hover:underline ${
+                    f.status === 'untracked' || f.status === 'added'
+                      ? 'text-add hover:text-add'
+                      : f.status === 'deleted'
+                        ? 'text-del line-through hover:text-del'
+                        : 'text-fg/90 hover:text-accent'
+                  }`}
+                  title={f.path}
+                  onClick={() => void useApp.getState().openFileDiff({ commitHash: null, filePath: f.path, staged: false, status: f.status })}
                 >
-                  <RotateCcw size={11} />
+                  {f.path}
+                </span>
+                {f.status === 'untracked' && (
+                  <span className="text-[9px] uppercase font-mono px-1 rounded bg-add/10 text-add border border-add/25 shrink-0">
+                    new
+                  </span>
+                )}
+                <button
+                  className="hidden group-hover:flex items-center justify-center w-5 h-5 rounded text-dim hover:text-fg hover:bg-panel3"
+                  title="Stage file"
+                  onClick={() => void runAndRefresh(() => api.stageFiles([f.path]))}
+                >
+                  <Plus size={11} />
                 </button>
-              )}
-            </div>
-          ))}
+                {f.status !== 'untracked' && (
+                  <button
+                    className="hidden group-hover:flex items-center justify-center w-5 h-5 rounded text-dim hover:text-del hover:bg-del/10"
+                    title="Discard changes"
+                    onClick={() => void runAndRefresh(() => api.discardFile(f.path), 'Changes discarded')}
+                  >
+                    <RotateCcw size={11} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </>
       )}
 
@@ -165,7 +263,7 @@ function FileRow({ file, commitHash }: { file: FileChange; commitHash: string | 
       className={`flex w-full items-center gap-2 px-3 py-1 text-sm text-left hover:bg-panel2 ${
         active ? 'bg-accent/10 text-accent' : 'text-fg/90'
       }`}
-      onClick={() => void openFileDiff({ commitHash, filePath: file.path })}
+      onClick={() => void openFileDiff({ commitHash, filePath: file.path, status: file.status })}
       title={file.path}
     >
       <StatusIcon status={file.status} />

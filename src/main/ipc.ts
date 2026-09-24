@@ -27,7 +27,8 @@ import {
   stashPop,
   stashApply,
   stashDrop,
-  revertHunk
+  revertHunk,
+  mergeBranch
 } from './git/branch-stash';
 import {
   checkoutCommit,
@@ -158,6 +159,10 @@ export function registerIpc(getWin: () => BrowserWindow | null, getRepo: () => s
   });
   handle('git:fetch', async () => {
     await withGit(requireRepo(), (g) => g.fetch());
+    return { ok: true };
+  });
+  handle('git:merge', async (branchName: string) => {
+    await mergeBranch(requireRepo(), branchName);
     return { ok: true };
   });
 

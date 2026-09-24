@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from './store';
+import { useSettings } from './store/settings';
 import { TabBar } from './components/TabBar/TabBar';
 import { Toolbar } from './components/Toolbar/Toolbar';
 import { Sidebar } from './components/Sidebar/Sidebar';
@@ -9,6 +9,8 @@ import { CommitDetailPanel } from './components/CommitDetailPanel/CommitDetailPa
 import { DiffViewer } from './components/DiffViewer/DiffViewer';
 import { StatusBar } from './components/StatusBar/StatusBar';
 import { Launchpad } from './components/Launchpad/Launchpad';
+import { SettingsModal } from './components/Settings/SettingsModal';
+import { AppLoadingScreen } from './components/Loading/AppLoadingScreen';
 
 function Toast() {
   const toast = useApp((s) => s.toast);
@@ -25,20 +27,45 @@ function Toast() {
 export function App() {
   const activeTab = useApp((s) => s.activeTab);
   const init = useApp((s) => s.init);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    void init();
+    const startTime = Date.now();
+    void init().finally(() => {
+      // Ensure the loading animation displays smoothly for at least 700ms
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, 700 - elapsed);
+      setTimeout(() => {
+        setIsReady(true);
+      }, remaining);
+    });
   }, [init]);
 
+  // Global keyboard shortcut for settings: Ctrl+, or Cmd+,
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault();
+        useSettings.getState().openSettings();
+      } else if (e.key === 'Escape') {
+        if (useApp.getState().openDiff) {
+          useApp.getState().closeDiff();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   return (
-    <div className="h-full flex flex-col bg-base overflow-hidden border border-[#22262e]/50">
+    <div className="h-full flex flex-col bg-base overflow-hidden border border-edge/50">
       <TabBar />
       {activeTab ? (
         <>
           <Toolbar />
           <div className="flex-1 flex min-h-0">
             <Sidebar />
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
               <CommitGraph />
               <DiffViewer />
             </div>
@@ -50,6 +77,8 @@ export function App() {
       )}
       <StatusBar />
       <Toast />
+      <SettingsModal />
+      <AppLoadingScreen isReady={isReady} />
     </div>
   );
 }

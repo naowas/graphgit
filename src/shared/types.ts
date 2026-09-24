@@ -113,6 +113,7 @@ export interface FileDiff {
   hunks: DiffHunk[];
   insertions: number;
   deletions: number;
+  isBinary?: boolean;
 }
 
 export interface GraphResult {
@@ -152,9 +153,10 @@ export interface GraphGitApi {
   pull(): Promise<{ ok: boolean; error?: string }>;
   push(): Promise<{ ok: boolean; error?: string }>;
   fetch(): Promise<{ ok: boolean; error?: string }>;
+  mergeBranch(name: string): Promise<{ ok: boolean; error?: string }>;
   checkoutBranch(name: string): Promise<{ ok: boolean; error?: string }>;
   createBranch(name: string, atHash?: string): Promise<{ ok: boolean; error?: string }>;
-  deleteBranch(name: string, opts?: { local?: boolean; remote?: boolean; force?: boolean }): Promise<{ ok: boolean; error?: string }>;
+  deleteBranch(name: string, opts?: { local?: boolean; remote?: boolean; remoteName?: string; force?: boolean }): Promise<{ ok: boolean; error?: string }>;
   renameBranch(name: string, newName: string): Promise<{ ok: boolean; error?: string }>;
   checkoutCommit(hash: string): Promise<{ ok: boolean; error?: string }>;
   createWorktree(hash: string, worktreePath: string): Promise<{ ok: boolean; error?: string }>;

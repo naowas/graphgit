@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Commit, CommitRef } from '../../../shared/types';
+import { Commit, CommitRef, GitFileStatus } from '../../../shared/types';
 import { useApp, WIP_HASH } from '../../store';
+import { useSettings } from '../../store/settings';
 import { api } from '../../lib/api';
 import { ContextMenu, ContextMenuItem } from '../ui/ContextMenu';
 import { buildGitGraph } from './gitgraph';
@@ -24,7 +25,9 @@ import {
   Laptop,
   User,
   Tag,
-  Cloud
+  Cloud,
+  Plus,
+  Minus
 } from 'lucide-react';
 
 const DOT_R = 5;
@@ -196,6 +199,7 @@ function CommitRow({
   graphW,
   laneColor = '#26c6da',
   hovered = false,
+  rowH = ROW_H,
   onContextMenu,
   onRefContextMenu
 }: {
@@ -204,22 +208,44 @@ function CommitRow({
   graphW: number;
   laneColor?: string;
   hovered?: boolean;
+  rowH?: number;
   onContextMenu?: (e: React.MouseEvent, commit: Commit) => void;
   onRefContextMenu?: (e: React.MouseEvent, ref: CommitRef) => void;
 }) {
   const selected = useApp((s) => s.selectedCommit);
   const selectCommit = useApp((s) => s.selectCommit);
   const openFileDiff = useApp((s) => s.openFileDiff);
+  const status = useApp((s) => s.status);
   const isSelected = selected === commit.hash;
+
+  const wipStats = useMemo(() => {
+    if (!isWip || !status) return null;
+    const all = [...(status.staged || []), ...(status.unstaged || [])];
+    const pathMap = new Map<string, GitFileStatus>();
+    for (const f of all) {
+      if (!pathMap.has(f.path)) {
+        pathMap.set(f.path, f);
+      } else if (f.status === 'deleted' || f.status === 'conflicted') {
+        pathMap.set(f.path, f);
+      }
+    }
+    const files = Array.from(pathMap.values());
+    const modified = files.filter((f) => f.status === 'modified' || f.status === 'renamed').length;
+    const added = files.filter((f) => f.status === 'added' || f.status === 'untracked').length;
+    const deleted = files.filter((f) => f.status === 'deleted').length;
+    const total = files.length;
+    return { modified, added, deleted, total };
+  }, [isWip, status]);
 
   const onDoubleClick = () => {
     if (isWip) {
       const st = useApp.getState().status;
-      const first = [...(st?.staged || []), ...(st?.unstaged || [])][0];
-      if (first) void openFileDiff({ commitHash: null, filePath: first.path });
+      const isStaged = (st?.staged || []).length > 0;
+      const first = (st?.staged || [])[0] || (st?.unstaged || [])[0];
+      if (first) void openFileDiff({ commitHash: null, filePath: first.path, staged: isStaged, status: first.status });
     } else {
       void api.getCommitDetail(commit.hash).then((d) => {
-        if (d && d.files[0]) void openFileDiff({ commitHash: commit.hash, filePath: d.files[0].path });
+        if (d && d.files[0]) void openFileDiff({ commitHash: commit.hash, filePath: d.files[0].path, status: d.files[0].status });
       });
     }
   };
@@ -228,14 +254,14 @@ function CommitRow({
 
   return (
     <div
-      className={`flex items-center border-b border-edge/30 cursor-pointer select-none transition-colors ${
+      className={`flex items-center cursor-pointer select-none transition-colors ${
         isSelected
-          ? 'bg-[#183550] border-b-[#204a70]'
+          ? 'bg-accent/20 font-medium'
           : hovered
-            ? 'bg-panel2/60'
+            ? 'bg-panel2/70'
             : 'hover:bg-panel2/40'
       }`}
-      style={{ height: ROW_H }}
+      style={{ height: rowH }}
       onClick={() => void selectCommit(commit.hash)}
       onDoubleClick={onDoubleClick}
       onContextMenu={(e) => {
@@ -280,15 +306,60 @@ function CommitRow({
 
       {/* 3. COMMIT MESSAGE column */}
       <div className="flex items-center flex-1 min-w-0 pr-3 pl-1 overflow-hidden">
-        {/* Vertical cyan indicator bar as in the reference image */}
-        <div
-          className="w-[3px] h-4 rounded-full shrink-0 mr-2"
-          style={{ backgroundColor: laneColor }}
-        />
+        {/* Vertical cyan indicator bar as in the reference image (only on regular commits) */}
+        {!isWip && (
+          <div
+            className="w-[3px] h-4 rounded-full shrink-0 mr-2"
+            style={{ backgroundColor: laneColor }}
+          />
+        )}
 
         {/* Message Subject */}
         {isWip ? (
-          <span className="truncate text-warn font-medium text-xs font-mono">// WIP</span>
+          <div className="flex items-center gap-2 select-none overflow-hidden">
+            <span className="px-2 py-0.5 rounded bg-panel3/90 border border-edge text-fg/80 font-mono text-[11px] font-medium tracking-wide shadow-xs shrink-0">
+              // WIP
+            </span>
+            {wipStats && (
+              <div className="flex items-center gap-2.5 shrink-0">
+                {wipStats.modified > 0 && (
+                  <span
+                    className="flex items-center gap-1 text-warn text-xs font-mono font-medium"
+                    title={`${wipStats.modified} modified file${wipStats.modified === 1 ? '' : 's'}`}
+                  >
+                    <Pencil size={11} className="text-warn shrink-0" />
+                    <span>{wipStats.modified}</span>
+                  </span>
+                )}
+                {wipStats.added > 0 && (
+                  <span
+                    className="flex items-center gap-0.5 text-add text-xs font-mono font-medium"
+                    title={`${wipStats.added} added/untracked file${wipStats.added === 1 ? '' : 's'}`}
+                  >
+                    <Plus size={13} className="text-add shrink-0 stroke-[2.5]" />
+                    <span>{wipStats.added}</span>
+                  </span>
+                )}
+                {wipStats.deleted > 0 && (
+                  <span
+                    className="flex items-center gap-0.5 text-del text-xs font-mono font-medium"
+                    title={`${wipStats.deleted} deleted file${wipStats.deleted === 1 ? '' : 's'}`}
+                  >
+                    <Minus size={13} className="text-del shrink-0 stroke-[2.5]" />
+                    <span>{wipStats.deleted}</span>
+                  </span>
+                )}
+                {wipStats.total > 0 &&
+                  wipStats.modified === 0 &&
+                  wipStats.added === 0 &&
+                  wipStats.deleted === 0 && (
+                    <span className="text-xs text-dim font-mono">
+                      {wipStats.total} changes
+                    </span>
+                  )}
+              </div>
+            )}
+          </div>
         ) : (
           <span
             className={`truncate text-xs font-normal ${
@@ -333,6 +404,9 @@ export function CommitGraph() {
   const loadMoreCommits = useApp((s) => s.loadMoreCommits);
   const isLoadingMoreCommits = useApp((s) => s.isLoadingMoreCommits);
 
+  const openDiff = useApp((s) => s.openDiff);
+  const diffMaximized = useApp((s) => s.diffMaximized);
+
   const [menu, setMenu] = useState<{ x: number; y: number; commit: Commit } | null>(null);
   const [refMenu, setRefMenu] = useState<{ x: number; y: number; ref: CommitRef } | null>(null);
   const [hoveredHash, setHoveredHash] = useState<string | null>(null);
@@ -347,7 +421,14 @@ export function CommitGraph() {
       setViewportHeight(el.clientHeight);
       const onResize = () => setViewportHeight(el.clientHeight);
       window.addEventListener('resize', onResize);
-      return () => window.removeEventListener('resize', onResize);
+      const ro = new ResizeObserver(() => {
+        if (el.clientHeight > 0) setViewportHeight(el.clientHeight);
+      });
+      ro.observe(el);
+      return () => {
+        window.removeEventListener('resize', onResize);
+        ro.disconnect();
+      };
     }
   }, []);
 
@@ -379,7 +460,10 @@ export function CommitGraph() {
     );
   }, [allCommits, q]);
 
-  const graphData = useMemo(() => buildGitGraph(commits, { rowH: ROW_H, laneW: LANE_W }), [commits]);
+  const graphRowHeight = useSettings((s) => s.graphRowHeight);
+  const rowH = graphRowHeight || ROW_H;
+
+  const graphData = useMemo(() => buildGitGraph(commits, { rowH, laneW: LANE_W }), [commits, rowH]);
 
   if (!log) {
     return <div className="flex-1 flex items-center justify-center text-dim text-sm">Open a repository to view the commit graph</div>;
@@ -387,15 +471,15 @@ export function CommitGraph() {
 
   const wip = status && (status.staged.length > 0 || status.unstaged.length > 0);
   const graphW = Math.max(graphData.width, 40);
-  const rowTop = wip ? ROW_H : 0;
+  const rowTop = wip ? rowH : 0;
 
   const BUFFER = 15;
-  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_H) - BUFFER);
-  const endIndex = Math.min(commits.length - 1, Math.ceil((scrollTop + viewportHeight) / ROW_H) + BUFFER);
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowH) - BUFFER);
+  const endIndex = Math.min(commits.length - 1, Math.ceil((scrollTop + viewportHeight) / rowH) + BUFFER);
   const visibleCommits = commits.length > 0 && endIndex >= startIndex ? commits.slice(startIndex, endIndex + 1) : [];
 
-  const topSpacerHeight = startIndex * ROW_H;
-  const bottomSpacerHeight = Math.max(0, (commits.length - 1 - endIndex) * ROW_H);
+  const topSpacerHeight = startIndex * rowH;
+  const bottomSpacerHeight = Math.max(0, (commits.length - 1 - endIndex) * rowH);
 
   const previewStub = (feature: string) => notify('info', `${feature} is a preview feature — coming soon`);
 
@@ -578,7 +662,7 @@ export function CommitGraph() {
     <div
       ref={scrollContainerRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-auto min-h-0 bg-base"
+      className={openDiff && diffMaximized ? 'hidden' : 'flex-1 overflow-auto min-h-0 bg-base'}
     >
       <div className="sticky top-0 z-10 flex items-center bg-panel border-b border-edge text-[11px] font-semibold tracking-wider text-dim select-none h-7">
         <div className="pl-3" style={{ width: BRANCH_W }}>
@@ -601,7 +685,7 @@ export function CommitGraph() {
           <GitGraphCanvas
             graphData={graphData}
             rowTop={rowTop}
-            rowH={ROW_H}
+            rowH={rowH}
             laneW={LANE_W}
             selectedHash={selectedCommit}
             hoveredHash={hoveredHash}
@@ -626,6 +710,7 @@ export function CommitGraph() {
             isWip
             graphW={graphW}
             laneColor={graphData.commits[0]?.color || '#26c6da'}
+            rowH={rowH}
           />
         )}
 
@@ -642,6 +727,7 @@ export function CommitGraph() {
               graphW={graphW}
               laneColor={graphData.commits[i]?.color || '#26c6da'}
               hovered={hoveredHash === c.hash}
+              rowH={rowH}
               onContextMenu={(e, commit) => {
                 void selectCommit(commit.hash);
                 setRefMenu(null);

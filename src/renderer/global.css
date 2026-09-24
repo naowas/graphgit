@@ -4,6 +4,26 @@
 
 :root {
   color-scheme: dark;
+  --color-base: #14171d;
+  --color-panel: #1a1d24;
+  --color-panel2: #222630;
+  --color-panel3: #2a303d;
+  --color-edge: #2d3340;
+  --color-fg: #e2e8f0;
+  --color-dim: #94a3b8;
+  --color-faint: #64748b;
+  --color-accent: #38bdf8;
+  --color-accent-hover: #0ea5e9;
+  --color-add: #34d399;
+  --color-add-bg: rgba(6, 78, 59, 0.3);
+  --color-del: #f87171;
+  --color-del-bg: rgba(127, 29, 29, 0.3);
+  --color-warn: #fbbf24;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+  --font-size-ui: 13px;
+  --font-size-code: 12px;
 }
 
 html,
@@ -12,8 +32,18 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  @apply bg-base text-fg font-sans text-base antialiased;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-ui);
+  @apply bg-base text-fg antialiased;
   user-select: none;
+}
+
+/* Code and diff blocks use configurable code font size */
+.font-mono,
+pre,
+code {
+  font-family: var(--font-mono) !important;
+  font-size: var(--font-size-code);
 }
 
 /* allow selection in diff/message content */
@@ -24,17 +54,17 @@ body,
 
 /* Slim scrollbars */
 *::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #3a3d46;
-  border-radius: 5px;
+  background: var(--color-edge);
+  border-radius: 4px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #4a4e59;
+  background: var(--color-dim);
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-corner {
@@ -42,23 +72,29 @@ body,
 }
 
 input,
-textarea {
-  @apply bg-panel2 border border-edge rounded px-2 py-1 text-fg outline-none;
+textarea,
+select {
+  @apply bg-panel2 border border-edge rounded px-2 py-1 text-fg outline-none transition-colors;
 }
-input:focus {
+input:focus,
+textarea:focus,
+select:focus {
   @apply border-accent;
 }
 
 .btn {
-  @apply flex items-center gap-1.5 rounded px-2 py-1 text-sm text-fg hover:bg-panel3 transition-colors disabled:opacity-40 disabled:pointer-events-none;
+  @apply flex items-center gap-1.5 rounded px-2.5 py-1 text-sm text-fg hover:bg-panel3 transition-all disabled:opacity-40 disabled:pointer-events-none;
 }
 .btn-icon {
-  @apply flex items-center justify-center w-7 h-7 rounded text-dim hover:text-fg hover:bg-panel3 transition-colors disabled:opacity-40 disabled:pointer-events-none;
+  @apply flex items-center justify-center w-7 h-7 rounded text-dim hover:text-fg hover:bg-panel3 transition-all disabled:opacity-40 disabled:pointer-events-none;
 }
 
-/* Solid, visible shadow for floating menus on the dark theme */
+/* Solid, visible shadow for floating menus */
 .shadow-xl {
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.35);
+}
+.light .shadow-xl {
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 /* GitGraph styling */
@@ -66,6 +102,54 @@ input:focus {
   transition: r 120ms ease, stroke-width 120ms ease;
 }
 #gg-rows svg circle:hover {
-  filter: brightness(1.2);
+  filter: brightness(1.25);
+}
+
+/* Shimmer animation for loading states */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 1.8s infinite;
+}
+
+/* App Loading animation keyframes */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+}
+
+@keyframes branch-draw {
+  0% {
+    stroke-dashoffset: 200;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-branch-draw {
+  stroke-dasharray: 200;
+  animation: branch-draw 2s ease-in-out infinite alternate;
 }
 

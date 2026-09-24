@@ -3,6 +3,7 @@ import {
   BranchInfo,
   CommitDetail,
   FileDiff,
+  FileStatusKind,
   GraphResult,
   GitStatus,
   StashInfo
@@ -17,6 +18,7 @@ export interface OpenedDiff {
   filePath: string;
   worktree?: boolean;
   staged?: boolean;
+  status?: FileStatusKind;
 }
 
 interface AppState {
@@ -35,6 +37,8 @@ interface AppState {
   diffLoading: boolean;
   sidebarVisible: boolean;
   sidebarWidth: number;
+  diffHeight: number;
+  diffMaximized: boolean;
   toast: { kind: 'info' | 'error' | 'success'; text: string } | null;
   filter: string;
   commitLimit: number;
@@ -52,6 +56,8 @@ interface AppActions {
   selectCommit(hash: string | null): Promise<void>;
   openFileDiff(d: OpenedDiff): Promise<void>;
   closeDiff(): void;
+  setDiffHeight(h: number): void;
+  toggleDiffMaximized(): void;
   setFilter(f: string): void;
   toggleSidebar(): void;
   setSidebarWidth(w: number): void;
@@ -79,6 +85,8 @@ export const useApp = create<AppStore>((set, get) => ({
   diffLoading: false,
   sidebarVisible: true,
   sidebarWidth: 240,
+  diffHeight: 360,
+  diffMaximized: true,
   toast: null,
   filter: '',
   commitLimit: 300,
@@ -220,14 +228,14 @@ export const useApp = create<AppStore>((set, get) => ({
   },
 
   async openFileDiff(d) {
-    set({ openDiff: d, fileDiff: null, diffLoading: true });
+    set({ openDiff: d, fileDiff: null, diffLoading: true, diffMaximized: true });
     try {
       const diff = await api.getFileDiff(d.commitHash ?? '', d.filePath, {
         staged: d.staged,
         worktree: d.worktree ?? d.commitHash === null
       });
       set({
-        fileDiff: diff && diff.hunks.length > 0 ? diff : { path: d.filePath, hunks: [], insertions: 0, deletions: 0 },
+        fileDiff: diff ?? { path: d.filePath, hunks: [], insertions: 0, deletions: 0 },
         diffLoading: false
       });
     } catch (err) {
@@ -237,7 +245,17 @@ export const useApp = create<AppStore>((set, get) => ({
   },
 
   closeDiff() {
-    set({ openDiff: null, fileDiff: null });
+    set({ openDiff: null, fileDiff: null, diffMaximized: true });
+  },
+
+  setDiffHeight(h) {
+    const minH = 120;
+    const maxH = typeof window !== 'undefined' ? Math.max(minH, window.innerHeight - 150) : 800;
+    set({ diffHeight: Math.max(minH, Math.min(maxH, h)) });
+  },
+
+  toggleDiffMaximized() {
+    set({ diffMaximized: !get().diffMaximized });
   },
 
   setFilter(f) {

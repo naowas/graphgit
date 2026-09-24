@@ -13,9 +13,11 @@ import {
   ChevronDown,
   FolderOpen,
   GitMerge,
-  History
+  History,
+  Settings
 } from 'lucide-react';
 import { useApp, WIP_HASH } from '../../store';
+import { useSettings } from '../../store/settings';
 import { Dropdown, MenuItem, MenuDivider } from '../ui/Dropdown';
 import { api } from '../../lib/api';
 
@@ -225,6 +227,16 @@ export function Toolbar() {
               onClick={() => {
                 close();
                 void useApp.getState().refresh();
+              }}
+            />
+            <MenuDivider />
+            <MenuItem
+              icon={<Settings size={14} />}
+              label="Settings…"
+              trailing="Ctrl+,"
+              onClick={() => {
+                close();
+                useSettings.getState().openSettings();
               }}
             />
           </>

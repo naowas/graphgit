@@ -27,9 +27,10 @@ export type Api = {
   pull(): Promise<{ ok: boolean }>;
   push(): Promise<{ ok: boolean }>;
   fetch(): Promise<{ ok: boolean }>;
+  mergeBranch(name: string): Promise<{ ok: boolean }>;
   checkoutBranch(name: string): Promise<{ ok: boolean }>;
   createBranch(name: string, atHash?: string): Promise<{ ok: boolean }>;
-  deleteBranch(name: string, opts?: { local?: boolean; remote?: boolean; force?: boolean }): Promise<{ ok: boolean }>;
+  deleteBranch(name: string, opts?: { local?: boolean; remote?: boolean; remoteName?: string; force?: boolean }): Promise<{ ok: boolean }>;
   renameBranch(name: string, newName: string): Promise<{ ok: boolean }>;
   checkoutCommit(hash: string): Promise<{ ok: boolean }>;
   createWorktree(hash: string, worktreePath: string): Promise<{ ok: boolean }>;
@@ -78,6 +79,7 @@ const api: Api = {
   pull: () => call('git:pull'),
   push: () => call('git:push'),
   fetch: () => call('git:fetch'),
+  mergeBranch: (name) => call('git:merge', name),
   checkoutBranch: (name) => call('git:checkout', name),
   createBranch: (name, atHash) => call('git:branch-create', name, atHash),
   deleteBranch: (name, opts) => call('git:branch-delete', name, opts),

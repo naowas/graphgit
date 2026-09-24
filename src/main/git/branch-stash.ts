@@ -126,3 +126,7 @@ export async function revertHunk(repoPath: string, diffText: string, hunkIndex: 
     await git.applyPatch(patch, ['--reverse', '--whitespace=nofix', '--recount']);
   });
 }
+
+export async function mergeBranch(repoPath: string, branchName: string): Promise<void> {
+  await withGit(repoPath, (git) => git.merge([branchName]));
+}
