@@ -22,7 +22,9 @@ import {
   Boxes,
   FolderGit2,
   ExternalLink,
-  RotateCcw
+  RotateCcw,
+  Search,
+  X
 } from 'lucide-react';
 import { useApp } from '../../store';
 import { api } from '../../lib/api';
@@ -837,17 +839,26 @@ function SidebarFull({
         </button>
       </div>
 
-      {/* Viewing N + filter */}
+      {/* Filter branches, tags, remotes */}
       <div className="p-1.5 border-b border-edge">
-        <div className="mb-1">
-          <span className="text-xs text-dim">Viewing {totalVisibleCount}</span>
+        <div className="relative flex items-center">
+          <Search size={12} className="absolute left-2 text-faint pointer-events-none" />
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter branches, tags, remotes…"
+            className="w-full text-xs !pl-6.5 !pr-6 py-1 h-7"
+          />
+          {filter ? (
+            <button
+              onClick={() => setFilter('')}
+              className="absolute right-1.5 text-faint hover:text-fg p-0.5"
+              title="Clear filter"
+            >
+              <X size={11} />
+            </button>
+          ) : null}
         </div>
-        <input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter branches, tags, remotes…"
-          className="w-full text-xs"
-        />
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0">

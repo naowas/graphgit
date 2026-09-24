@@ -31,11 +31,11 @@ export function Dropdown({
   }, [open]);
 
   return (
-    <div className="relative" ref={ref}>
+    <div className={`relative ${open ? 'z-50' : ''}`} ref={ref}>
       <div onClick={() => setOpen((o) => !o)}>{trigger}</div>
       {open && (
         <div
-          className="absolute z-50 mt-1 rounded-md border border-edge bg-panel2 shadow-xl py-1 max-h-96 overflow-y-auto"
+          className="absolute z-50 mt-1 rounded-md border border-edge bg-panel2 shadow-2xl py-1 max-h-96 overflow-y-auto"
           style={{ [align]: 0, width } as React.CSSProperties}
         >
           {children(() => setOpen(false))}

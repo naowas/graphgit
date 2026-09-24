@@ -161,9 +161,9 @@ export function Toolbar() {
   };
 
   return (
-    <div className="relative flex items-center bg-panel border-b border-edge px-3 py-1 gap-2 shrink-0 h-10">
+    <div className="relative z-30 flex items-center bg-panel border-b border-edge px-3 py-1 gap-2 shrink-0 h-10">
       {/* Left section: Repository & Branch dropdowns */}
-      <div className="flex items-center gap-2 shrink-0 z-[1]">
+      <div className="flex items-center gap-2 shrink-0">
         {/* Repository dropdown */}
         <Dropdown
           trigger={
@@ -219,14 +219,17 @@ export function Toolbar() {
             const q = branchQuery.toLowerCase();
             return (
               <>
-                <div className="px-3 pb-1.5">
-                  <input
-                    placeholder="Filter branches…"
-                    value={branchQuery}
-                    onChange={(e) => setBranchQuery(e.target.value)}
-                    className="w-full text-xs"
-                    autoFocus
-                  />
+                <div className="px-2.5 pb-1.5 pt-1">
+                  <div className="relative flex items-center">
+                    <Search size={12} className="absolute left-2 text-faint pointer-events-none" />
+                    <input
+                      placeholder="Filter branches…"
+                      value={branchQuery}
+                      onChange={(e) => setBranchQuery(e.target.value)}
+                      className="w-full text-xs !pl-6.5 !pr-2 py-1"
+                      autoFocus
+                    />
+                  </div>
                 </div>
                 {branches.local
                   .filter((b) => b.name.toLowerCase().includes(q))
@@ -254,7 +257,7 @@ export function Toolbar() {
       </div>
 
       {/* Center section: Action buttons strictly centered in the toolbar */}
-      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 z-[2]">
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 pointer-events-auto">
         <ActionButton
           icon={<RefreshCw size={14} />}
           label="Fetch"
@@ -322,7 +325,7 @@ export function Toolbar() {
       </div>
 
       {/* Right section: Actions menu */}
-      <div className="ml-auto flex items-center gap-1.5 shrink-0 z-[1]">
+      <div className="ml-auto flex items-center gap-1.5 shrink-0">
         <Dropdown
           align="right"
           trigger={
@@ -455,17 +458,17 @@ function SearchBox() {
   return (
     <div className="flex items-center gap-1.5">
       <div className="relative flex items-center">
-        <Search size={13} className="absolute left-2 text-faint pointer-events-none" />
+        <Search size={13} className="absolute left-2.5 text-faint pointer-events-none z-10" />
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter commits…"
-          className="w-36 md:w-44 text-xs pl-7 pr-6 h-7"
+          className="w-36 md:w-48 text-xs !pl-8 !pr-7 h-7"
         />
         {filter ? (
           <button
             onClick={() => setFilter('')}
-            className="absolute right-1.5 text-faint hover:text-fg p-0.5"
+            className="absolute right-1.5 text-faint hover:text-fg p-0.5 z-10"
             title="Clear filter"
           >
             <X size={12} />
