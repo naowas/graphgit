@@ -56,6 +56,14 @@ export type Api = {
   blame(filePath: string): Promise<string>;
   getBlame(filePath: string): Promise<import('../shared/types').BlameLine[]>;
   getFileHistory(filePath: string): Promise<import('../shared/types').FileHistoryEntry[]>;
+  getConflictFile(filePath: string): Promise<import('../shared/types').ConflictFileParsed>;
+  resolveConflictFile(filePath: string, content: string): Promise<{ ok: boolean; error?: string }>;
+  getRepoOperationState(): Promise<import('../shared/types').RepoOperationState>;
+  abortOperation(): Promise<{ ok: boolean; error?: string }>;
+  continueOperation(): Promise<{ ok: boolean; error?: string }>;
+  cherryPick(hash: string): Promise<{ ok: boolean; hasConflicts?: boolean; error?: string }>;
+  getCommitsForRebase(baseHash: string): Promise<import('../shared/types').RebaseStep[]>;
+  executeInteractiveRebase(baseHash: string, steps: import('../shared/types').RebaseStep[]): Promise<{ ok: boolean; hasConflicts?: boolean; error?: string }>;
   openTerminal(): Promise<{ ok: boolean; error?: string }>;
   openInEditor(filePath: string): Promise<{ ok: boolean; error?: string }>;
   setActiveRepo(path: string): void;
@@ -116,6 +124,14 @@ const api: Api = {
   blame: (filePath) => call('git:blame', filePath),
   getBlame: (filePath) => call('git:get-blame', filePath),
   getFileHistory: (filePath) => call('git:get-file-history', filePath),
+  getConflictFile: (filePath) => call('git:get-conflict-file', filePath),
+  resolveConflictFile: (filePath, content) => call('git:resolve-conflict-file', filePath, content),
+  getRepoOperationState: () => call('git:get-operation-state'),
+  abortOperation: () => call('git:abort-operation'),
+  continueOperation: () => call('git:continue-operation'),
+  cherryPick: (hash) => call('git:cherry-pick', hash),
+  getCommitsForRebase: (baseHash) => call('git:get-commits-for-rebase', baseHash),
+  executeInteractiveRebase: (baseHash, steps) => call('git:execute-interactive-rebase', baseHash, steps),
   openTerminal: () => call('app:open-terminal'),
   openInEditor: (filePath) => call('app:open-in-editor', filePath),
   setActiveRepo: (path: string) => ipcRenderer.send('repo:set-active', path),

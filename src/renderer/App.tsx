@@ -11,6 +11,9 @@ import { StatusBar } from './components/StatusBar/StatusBar';
 import { Launchpad } from './components/Launchpad/Launchpad';
 import { SettingsModal } from './components/Settings/SettingsModal';
 import { AppLoadingScreen } from './components/Loading/AppLoadingScreen';
+import { ConflictBanner } from './components/ConflictResolver/ConflictBanner';
+import { ConflictResolverModal } from './components/ConflictResolver/ConflictResolverModal';
+import { InteractiveRebaseModal } from './components/Rebase/InteractiveRebaseModal';
 
 function Toast() {
   const toast = useApp((s) => s.toast);
@@ -63,6 +66,7 @@ export function App() {
       {activeTab ? (
         <>
           <Toolbar />
+          <ConflictBanner />
           <div className="flex-1 flex min-h-0">
             <Sidebar />
             <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
@@ -77,6 +81,8 @@ export function App() {
       )}
       <StatusBar />
       <Toast />
+      <ConflictResolverModal />
+      <InteractiveRebaseModal />
       <SettingsModal />
       <AppLoadingScreen isReady={isReady} />
     </div>

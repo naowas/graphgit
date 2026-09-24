@@ -153,6 +153,44 @@ export interface FileHistoryEntry {
   summary: string;
 }
 
+export interface ConflictSection {
+  id: string;
+  startLine: number;
+  endLine: number;
+  currentLabel: string;
+  currentLines: string[];
+  incomingLabel: string;
+  incomingLines: string[];
+  resolvedChoice?: 'current' | 'incoming' | 'both';
+}
+
+export interface ConflictFileParsed {
+  filePath: string;
+  sections: Array<
+    | { type: 'text'; lines: string[] }
+    | { type: 'conflict'; conflict: ConflictSection }
+  >;
+  totalConflicts: number;
+  rawContent: string;
+}
+
+export interface RepoOperationState {
+  inMerge: boolean;
+  inRebase: boolean;
+  inCherryPick: boolean;
+  conflictedFiles: string[];
+}
+
+export type RebaseActionKind = 'pick' | 'squash' | 'fixup' | 'reword' | 'drop';
+
+export interface RebaseStep {
+  hash: string;
+  shortHash: string;
+  action: RebaseActionKind;
+  message: string;
+  author: string;
+}
+
 export type DiffViewMode = 'unified' | 'split';
 export type DiffActiveTab = 'diff' | 'blame' | 'history';
 
@@ -205,6 +243,14 @@ export interface StrataGitApi {
   blame(filePath: string): Promise<string>;
   getBlame(filePath: string): Promise<BlameLine[]>;
   getFileHistory(filePath: string): Promise<FileHistoryEntry[]>;
+  getConflictFile(filePath: string): Promise<ConflictFileParsed>;
+  resolveConflictFile(filePath: string, content: string): Promise<{ ok: boolean; error?: string }>;
+  getRepoOperationState(): Promise<RepoOperationState>;
+  abortOperation(): Promise<{ ok: boolean; error?: string }>;
+  continueOperation(): Promise<{ ok: boolean; error?: string }>;
+  cherryPick(hash: string): Promise<{ ok: boolean; hasConflicts?: boolean; error?: string }>;
+  getCommitsForRebase(baseHash: string): Promise<RebaseStep[]>;
+  executeInteractiveRebase(baseHash: string, steps: RebaseStep[]): Promise<{ ok: boolean; hasConflicts?: boolean; error?: string }>;
   openTerminal(): Promise<{ ok: boolean; error?: string }>;
   openInEditor(filePath: string): Promise<{ ok: boolean; error?: string }>;
   minimizeWindow(): Promise<boolean>;

@@ -10,7 +10,8 @@ import {
   BranchInfo,
   StashInfo,
   CommitDetail,
-  FileDiff
+  FileDiff,
+  RebaseStep
 } from '../shared/types';
 import { isValidRepo, errorMessage, withGit } from './git/core';
 import { getLog, repoDisplayName } from './git/log';
@@ -54,6 +55,16 @@ import {
   getBlameLines,
   getFileHistory
 } from './git/hunk-actions';
+import {
+  getRepoOperationState,
+  getConflictFile,
+  resolveConflictFile,
+  abortOperation,
+  continueOperation,
+  cherryPick,
+  getCommitsForRebase,
+  executeInteractiveRebase
+} from './git/conflicts-rebase';
 
 /** Recently opened repos persisted in the user config dir. */
 const recentFile = () => path.join(os.homedir(), '.config', 'stratagit', 'recent-repos.json');
@@ -312,6 +323,41 @@ export function registerIpc(getWin: () => BrowserWindow | null, getRepo: () => s
   });
   handle('git:get-file-history', async (filePath: string) => {
     return getFileHistory(requireRepo(), filePath);
+  });
+
+  handle('git:get-conflict-file', async (filePath: string) => {
+    return getConflictFile(requireRepo(), filePath);
+  });
+
+  handle('git:resolve-conflict-file', async (filePath: string, content: string) => {
+    await resolveConflictFile(requireRepo(), filePath, content);
+    return { ok: true };
+  });
+
+  handle('git:get-operation-state', async () => {
+    return getRepoOperationState(requireRepo());
+  });
+
+  handle('git:abort-operation', async () => {
+    await abortOperation(requireRepo());
+    return { ok: true };
+  });
+
+  handle('git:continue-operation', async () => {
+    await continueOperation(requireRepo());
+    return { ok: true };
+  });
+
+  handle('git:cherry-pick', async (hash: string) => {
+    return cherryPick(requireRepo(), hash);
+  });
+
+  handle('git:get-commits-for-rebase', async (baseHash: string) => {
+    return getCommitsForRebase(requireRepo(), baseHash);
+  });
+
+  handle('git:execute-interactive-rebase', async (baseHash: string, steps: RebaseStep[]) => {
+    return executeInteractiveRebase(requireRepo(), baseHash, steps);
   });
 
   handle('app:open-terminal', async () => {

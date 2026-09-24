@@ -15,6 +15,7 @@ import {
   Undo2,
   RotateCcw,
   Copy,
+  Layers,
   X
 } from 'lucide-react';
 import { FileChange, FileStatusKind } from '../../../shared/types';
@@ -362,6 +363,8 @@ export function CommitDetailPanel() {
   const selectCommit = useApp((s) => s.selectCommit);
   const notify = useApp((s) => s.notify);
   const runAndRefresh = useApp((s) => s.runAndRefresh);
+  const openRebaseModal = useApp((s) => s.openRebaseModal);
+  const cherryPickCommit = useApp((s) => s.cherryPickCommit);
   const isWip = selectedCommit === WIP_HASH;
   const [panelWidth, setPanelWidth] = useState(360);
 
@@ -471,6 +474,22 @@ export function CommitDetailPanel() {
                     onClick={() => {
                       close();
                       void runAndRefresh(() => api.revertCommit(detail.hash), `Reverted ${detail.shortHash}`);
+                    }}
+                  />
+                  <MenuItem
+                    icon={<Layers size={13} />}
+                    label="Cherry-pick onto current branch"
+                    onClick={() => {
+                      close();
+                      void cherryPickCommit(detail.hash);
+                    }}
+                  />
+                  <MenuItem
+                    icon={<GitBranch size={13} />}
+                    label="Interactive rebase from here"
+                    onClick={() => {
+                      close();
+                      openRebaseModal(detail.hash);
                     }}
                   />
                 </>

@@ -8,7 +8,8 @@ import {
   GitStatus,
   StashInfo,
   DiffViewMode,
-  DiffActiveTab
+  DiffActiveTab,
+  RepoOperationState
 } from '../../shared/types';
 import { api, unwrap } from '../lib/api';
 
@@ -43,6 +44,9 @@ interface AppState {
   diffMaximized: boolean;
   diffViewMode: DiffViewMode;
   diffActiveTab: DiffActiveTab;
+  operationState: RepoOperationState | null;
+  conflictedFileToResolve: string | null;
+  rebaseModalBaseCommit: string | null;
   toast: { kind: 'info' | 'error' | 'success'; text: string } | null;
   filter: string;
   commitLimit: number;
@@ -65,6 +69,13 @@ interface AppActions {
   setDiffViewMode(mode: DiffViewMode): void;
   setDiffActiveTab(tab: DiffActiveTab): void;
   reloadCurrentDiff(): Promise<void>;
+  openConflictResolver(filePath: string): void;
+  closeConflictResolver(): void;
+  abortRepoOperation(): Promise<void>;
+  continueRepoOperation(): Promise<void>;
+  openRebaseModal(baseCommitHash: string): void;
+  closeRebaseModal(): void;
+  cherryPickCommit(hash: string): Promise<void>;
   setFilter(f: string): void;
   toggleSidebar(): void;
   setSidebarWidth(w: number): void;
@@ -96,6 +107,9 @@ export const useApp = create<AppStore>((set, get) => ({
   diffMaximized: true,
   diffViewMode: (typeof localStorage !== 'undefined' && (localStorage.getItem('stratagit:diffViewMode') as DiffViewMode)) || 'unified',
   diffActiveTab: 'diff',
+  operationState: null,
+  conflictedFileToResolve: null,
+  rebaseModalBaseCommit: null,
   toast: null,
   filter: '',
   commitLimit: 300,
@@ -167,13 +181,14 @@ export const useApp = create<AppStore>((set, get) => ({
     if (!repo) return;
     const limit = get().commitLimit || 300;
     try {
-      const [status, log, branches, stashes] = await Promise.all([
+      const [status, log, branches, stashes, operationState] = await Promise.all([
         unwrap(api.getStatus()),
         unwrap(api.getLog(limit)),
         unwrap(api.getBranches()),
-        unwrap(api.getStashes())
+        unwrap(api.getStashes()),
+        unwrap(api.getRepoOperationState()).catch(() => null)
       ]);
-      set({ status, log, branches, stashes });
+      set({ status, log, branches, stashes, operationState });
     } catch (err) {
       get().notify('error', String(err).replace('Error: ', ''));
     }
@@ -292,6 +307,52 @@ export const useApp = create<AppStore>((set, get) => ({
     } catch (err) {
       console.error('Failed to reload diff:', err);
     }
+  },
+
+  openConflictResolver(filePath) {
+    set({ conflictedFileToResolve: filePath });
+  },
+
+  closeConflictResolver() {
+    set({ conflictedFileToResolve: null });
+  },
+
+  async abortRepoOperation() {
+    await get().runAndRefresh(async () => {
+      await api.abortOperation();
+      set({ conflictedFileToResolve: null });
+    }, 'Operation aborted');
+  },
+
+  async continueRepoOperation() {
+    await get().runAndRefresh(async () => {
+      await api.continueOperation();
+      set({ conflictedFileToResolve: null });
+    }, 'Operation continued');
+  },
+
+  openRebaseModal(baseCommitHash) {
+    set({ rebaseModalBaseCommit: baseCommitHash });
+  },
+
+  closeRebaseModal() {
+    set({ rebaseModalBaseCommit: null });
+  },
+
+  async cherryPickCommit(hash) {
+    await get().runAndRefresh(async () => {
+      const res = await api.cherryPick(hash);
+      if (!res.ok) {
+        if (res.hasConflicts) {
+          const op = await api.getRepoOperationState();
+          if (op.conflictedFiles.length > 0) {
+            get().openConflictResolver(op.conflictedFiles[0]);
+          }
+          throw new Error('Cherry-pick produced merge conflicts. Please resolve conflicts.');
+        }
+        throw new Error(res.error || 'Cherry-pick failed');
+      }
+    }, 'Commit cherry-picked');
   },
 
   setFilter(f) {

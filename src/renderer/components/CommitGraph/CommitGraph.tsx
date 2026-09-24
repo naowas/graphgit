@@ -27,7 +27,8 @@ import {
   Tag,
   Cloud,
   Plus,
-  Minus
+  Minus,
+  Layers
 } from 'lucide-react';
 
 const DOT_R = 5;
@@ -403,6 +404,8 @@ export function CommitGraph() {
   const notify = useApp((s) => s.notify);
   const loadMoreCommits = useApp((s) => s.loadMoreCommits);
   const isLoadingMoreCommits = useApp((s) => s.isLoadingMoreCommits);
+  const openRebaseModal = useApp((s) => s.openRebaseModal);
+  const cherryPickCommit = useApp((s) => s.cherryPickCommit);
 
   const openDiff = useApp((s) => s.openDiff);
   const diffMaximized = useApp((s) => s.diffMaximized);
@@ -585,6 +588,16 @@ export function CommitGraph() {
         submitLabel: 'Create branch',
         onSubmit: (name) => void runAndRefresh(() => api.createBranch(name, commit.hash), `Branch '${name}' created`)
       }
+    },
+    {
+      label: 'Cherry-Pick onto current branch',
+      icon: <Layers size={13} />,
+      onClick: () => void cherryPickCommit(commit.hash)
+    },
+    {
+      label: 'Interactive Rebase from here...',
+      icon: <GitBranch size={13} />,
+      onClick: () => openRebaseModal(commit.hash)
     },
     { label: '', divider: true },
     ...(currentBranch
