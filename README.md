@@ -10,7 +10,7 @@
 [![Electron](https://img.shields.io/badge/Electron-33.2.0-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.3-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS-lightgrey.svg)](#installation--build)
 
 </div>
@@ -92,7 +92,7 @@ Inspired by modern visual Git workflows, StrataGit combines the responsiveness o
 │  - TabBar & Launchpad State (Zustand)                  │
 │  - SVG Commit Strata Graph Renderer                   │
 │  - Diff Viewer & File Tree Hierarchy                   │
-│  - Theme & Typography Engine (CSS Variables)           │
+│  - Theme & Typography Engine (CSS Vars / Tailwind v4)  │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -204,9 +204,14 @@ stratagit/
 │   │   ├── store/             # Zustand state stores (app & settings)
 │   │   └── index.html         # HTML root document
 │   └── shared/                # Cross-process TypeScript types & contracts
-├── package.json               # Manifest & build configurations
-└── tailwind.config.js         # Tailwind theme & design tokens
+├── package.json               # Manifest, ESM type, & build configurations
+├── postcss.config.js          # Tailwind v4 PostCSS adapter (@tailwindcss/postcss)
+└── tsconfig.json              # TypeScript project configuration
 ```
+
+> **Tailwind v4** — design tokens (colors, fonts, sizes) live in an `@theme {}` block
+> inside `src/renderer/global.css`. There is no `tailwind.config.js`; all theme
+> customisation is done via standard CSS custom properties.
 
 ---
 
