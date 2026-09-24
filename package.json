@@ -4,7 +4,10 @@
   "version": "0.1.0",
   "description": "A commit-graph-centric visual Git client for Linux and macOS",
   "main": "out/main/index.js",
-  "author": "StrataGit",
+  "author": {
+    "name": "StrataGit Team",
+    "email": "support@stratagit.dev"
+  },
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -54,6 +57,7 @@
         "AppImage",
         "deb"
       ],
+      "maintainer": "support@stratagit.dev",
       "category": "Development",
       "icon": "build/icon.png"
     },
